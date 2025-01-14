@@ -41,9 +41,6 @@ The system is designed to ensure modularity, scalability, and reliability:
 
 This guide provides concise instructions to set up MySQL and Redis using Docker. Follow these steps for a seamless setup.
 
-## Prerequisites
-- Ensure Docker is installed and running.
-
 ---
 
 ### MySQL Setup
