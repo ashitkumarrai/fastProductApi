@@ -122,7 +122,9 @@ By following these steps, MySQL and Redis should be successfully running on your
 
 Run the application:
 ```bash
+mvn clean install
 mvn spring-boot:run
+
 ```
 
 
