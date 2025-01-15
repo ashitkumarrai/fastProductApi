@@ -3,4 +3,39 @@ spring:
     name: fastProductApi
   profiles:
     active: dev
+server:
+  servlet:
+    context-path: /api/v1
+
+# Logging Configuration
+logging:
+  # Application name to identify logs (optional)
+  application:
+    name: fastProductApi
+
+  # Set the root logging level (INFO, DEBUG, WARN, ERROR)
+  level:
+    root: INFO
+
+  # Log file location and name
+  file:
+    name: ./logs/fastProductApplication.log  # Base log file name
+
+  logback:
+    rollingpolicy:
+      # File name pattern for rolling logs
+      # Daily rotation with index (e.g., fastProductApplication.2025-01-14.1.gz)
+      file-name-pattern: fastProductApplication.%d{yyyy-MM-dd}.%i.gz
+
+      # Maximum size of a single log file before creating a new one
+      max-file-size: 10MB
+
+      # Total size cap for all log files (compressed or uncompressed)
+      total-size-cap: 1GB
+
+      # Maximum number of days to keep logs
+      max-history: 7
+
+      # Clean up old logs when the application starts
+      clean-history-on-start: true
 
