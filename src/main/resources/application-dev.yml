@@ -4,6 +4,12 @@ spring:
     url: jdbc:mysql://localhost:3306/productdb?createDatabaseIfNotExist=true
     username: root
     password: 123456789
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+      retry:
+        max-retries: 3
+        initial-interval: 2000  # 2 seconds delay before retry
 
 
   # Hibernate Configuration
@@ -14,14 +20,20 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQL8Dialect
-        format_sql: true
 
 # Redis Configuration
   redis:
     host: localhost
     port: 6379
-    timeout: 2000ms  # optional timeout setting
   cache:
     type: redis
     redis:
       time-to-live: 120m  # TTL for all caches, can change this value (e.g., 1m)
+
+  lettuce:
+    pool:
+      max-active: 10            # Max number of active connections that can be used at the same time
+      max-idle: 5               # Max number of idle connections that can remain in the pool
+      min-idle: 1               # Min number of idle connections in the pool (these will be kept open even if not used)
+      max-wait: 1000            # Max time (in milliseconds) to wait for a connection from the pool before giving up
+

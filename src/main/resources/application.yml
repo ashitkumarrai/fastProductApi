@@ -13,9 +13,12 @@ logging:
   application:
     name: fastProductApi
 
+
+
   # Set the root logging level (INFO, DEBUG, WARN, ERROR)
   level:
     root: INFO
+    org.springframework.cache: TRACE
 
   # Log file location and name
   file:
@@ -38,4 +41,11 @@ logging:
 
       # Clean up old logs when the application starts
       clean-history-on-start: true
+
+#Actuator enabling for performance metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
 

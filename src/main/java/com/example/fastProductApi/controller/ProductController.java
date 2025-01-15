@@ -2,20 +2,24 @@ package com.example.fastProductApi.controller;
 
 import com.example.fastProductApi.dto.*;
 import com.example.fastProductApi.entity.Product;
+import com.example.fastProductApi.exception.CustomException;
 import com.example.fastProductApi.mapper.ProductMapper;
 import com.example.fastProductApi.service.ProductServiceForBasicCrud;
 import com.example.fastProductApi.service.ProductServiceForBulkCrud;
+import com.example.fastProductApi.util.ConstantMessages;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
 import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
 @RequestMapping("/products")
 public class ProductController {
+    static Logger log = LoggerFactory.getLogger(ProductController.class);
 
     @Autowired
     private ProductServiceForBulkCrud productServiceForBulkCrud;
@@ -26,9 +30,11 @@ public class ProductController {
     @Autowired
     private ProductMapper productMapper;
 
+
     /**
      * Fetch products by IDs with an option for sequential or parallel processing.
-     * @param isParallel Indicates if the operation should use parallel processing.
+     *
+     * @param isParallel            Indicates if the operation should use parallel processing.
      * @param productByIdRequestDto Contains the list of product IDs to fetch.
      * @return ResponseEntity containing found products and any missing IDs.
      */
@@ -37,13 +43,25 @@ public class ProductController {
             @RequestParam(defaultValue = "true") boolean isParallel,
             @RequestBody ProductByIdRequestDto productByIdRequestDto) {
 
-        List<Optional<Product>> products = fetchProductsByIds(productByIdRequestDto.ids(), isParallel);
+        List<Optional<Product>> products;
+        try {
+            products = fetchProductsByIds(productByIdRequestDto.ids(), isParallel);
+        } catch (CustomException e) {
+            log.error(ConstantMessages.EXCEPTION_OCCUR_IN_API, e.getClass().getName(), e.getMessage());
+            String message = e.getMessage() + " " + e.getCause() + " " + e.getLocalizedMessage();
+            if (logInCaseOfDbConnectionFailure(e)) {
+                message = "Exception occur in api, DB connection failed";
+            }
+            return ResponseEntity.internalServerError().body(new ProductsByIdResponseDto(new ArrayList<>(), new ResponseStatusVo(message, HttpStatus.INTERNAL_SERVER_ERROR.toString())));
+        }
         return ResponseEntity.ok(mapProductsToResponse(products, productByIdRequestDto.ids()));
     }
 
+
     /**
      * Upload a list of products. Supports both sequential and parallel processing.
-     * @param isParallel Indicates if the operation should use parallel processing.
+     *
+     * @param isParallel                  Indicates if the operation should use parallel processing.
      * @param uploadProductListRequestDto Contains the list of products to upload.
      * @return ResponseEntity with details of uploaded products.
      */
@@ -52,13 +70,24 @@ public class ProductController {
             @RequestParam(defaultValue = "true") boolean isParallel,
             @RequestBody UploadProductListRequestDto uploadProductListRequestDto) {
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(processProductList(uploadProductListRequestDto, isParallel, false));
+        try {
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(processProductList(uploadProductListRequestDto, isParallel, false));
+        } catch (CustomException e) {
+            log.error(ConstantMessages.EXCEPTION_OCCUR_IN_API, e.getClass().getName(), e.getMessage());
+            String message = e.getMessage() + " " + e.getCause() + " " + e.getLocalizedMessage();
+            if (logInCaseOfDbConnectionFailure(e)) {
+                message = "Exception occur in api, DB connection failed";
+            }
+            return ResponseEntity.internalServerError().body(new ProductListResponseDto(new ArrayList<>(), new ResponseStatusVo(message, HttpStatus.INTERNAL_SERVER_ERROR.toString())));
+        }
     }
 
     /**
      * Update a list of products. Supports both sequential and parallel processing.
-     * @param isParallel Indicates if the operation should use parallel processing.
+     *
+     * @param isParallel                  Indicates if the operation should use parallel processing.
      * @param uploadProductListRequestDto Contains the list of products to update.
      * @return ResponseEntity with details of updated products.
      */
@@ -66,33 +95,65 @@ public class ProductController {
     public ResponseEntity<ProductListResponseDto> updateProductList(
             @RequestParam(defaultValue = "true") boolean isParallel,
             @RequestBody UploadProductListRequestDto uploadProductListRequestDto) {
+        try {
 
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(processProductList(uploadProductListRequestDto, isParallel, true));
+            return ResponseEntity.status(HttpStatus.CREATED)
+                    .body(processProductList(uploadProductListRequestDto, isParallel, true));
+        } catch (CustomException e) {
+            log.error(ConstantMessages.EXCEPTION_OCCUR_IN_API, e.getClass().getName(), e.getMessage());
+            String message = e.getMessage() + " " + e.getCause() + " " + e.getLocalizedMessage();
+            if (logInCaseOfDbConnectionFailure(e)) {
+                message = "Exception occur in api, DB connection failed";
+            }
+            return ResponseEntity.internalServerError().body(new ProductListResponseDto(new ArrayList<>(), new ResponseStatusVo(message, HttpStatus.INTERNAL_SERVER_ERROR.toString())));
+        }
     }
 
     /**
      * Delete products by IDs with an option for sequential or parallel processing.
+     *
      * @param isParallel Indicates if the operation should use parallel processing.
-     * @param ids Contains the list of product IDs to delete.
+     * @param ids        Contains the list of product IDs to delete.
      * @return ResponseEntity with details of deleted products.
      */
     @DeleteMapping("/deleteProductsByIds")
     public ResponseEntity<ProductsDeleteResponseDto> deleteProducts(
             @RequestParam(defaultValue = "true") boolean isParallel,
-            @RequestBody ProductByIdRequestDto ids) {
+            @RequestBody ProductByIdRequestDto ids) throws CustomException {
+        try {
 
-        ProductsDeleteResponseDto response = isParallel
-                ? productServiceForBulkCrud.deleteByIdsInParallel(ids.ids())
-                : productServiceForBulkCrud.deleteByIdsInSeq(ids.ids());
+            ProductsDeleteResponseDto response = isParallel
+                    ? productServiceForBulkCrud.deleteByIdsInParallel(ids.ids())
+                    : productServiceForBulkCrud.deleteByIdsInSeq(ids.ids());
 
-        return ResponseEntity.ok(response);
+            return ResponseEntity.ok(response);
+        }catch (CustomException e) {
+            log.error(ConstantMessages.EXCEPTION_OCCUR_IN_API, e.getClass().getName(), e.getMessage());
+            String message = e.getMessage() + " " + e.getCause() + " " + e.getLocalizedMessage();
+            if (logInCaseOfDbConnectionFailure(e)) {
+                message = "Exception occur in api, DB connection failed";
+            }
+            return ResponseEntity.internalServerError().body(new ProductsDeleteResponseDto(new ArrayList<>(), new ResponseStatusVo(message, HttpStatus.INTERNAL_SERVER_ERROR.toString())));
+        }
+
+    }
+
+
+    /**
+     * check if the exception related to DB connection failed.
+     */
+    private boolean logInCaseOfDbConnectionFailure(Exception e) {
+        if (e.getCause() != null && e.getCause().getMessage() != null && e.getCause().getMessage().contains(ConstantMessages.UNABLE_TO_ACQUIRE_JDBC_CONNECTION)) {
+            log.error(ConstantMessages.DB_CONN_FAILED);
+            return true;
+        }
+        return false;
     }
 
     /**
      * Fetches products based on IDs using either sequential or parallel processing.
      */
-    private List<Optional<Product>> fetchProductsByIds(List<Long> ids, boolean isParallel) {
+    private List<Optional<Product>> fetchProductsByIds(List<Long> ids, boolean isParallel) throws CustomException {
         return isParallel
                 ? productServiceForBulkCrud.getProductByIdsInParallel(ids)
                 : productServiceForBulkCrud.getProductByIdsInSeq(ids);
@@ -127,7 +188,7 @@ public class ProductController {
     /**
      * Handles both product saving and updating with an option for sequential or parallel processing.
      */
-    private ProductListResponseDto processProductList(UploadProductListRequestDto dto, boolean isParallel, boolean isUpdate) {
+    private ProductListResponseDto processProductList(UploadProductListRequestDto dto, boolean isParallel, boolean isUpdate) throws CustomException {
         return isParallel
                 ? productServiceForBulkCrud.saveOrUpdateProductInParallel(dto, isUpdate)
                 : processProductsSequentially(dto.getProducts(), isUpdate);
@@ -136,7 +197,7 @@ public class ProductController {
     /**
      * Processes products sequentially for saving or updating.
      */
-    private ProductListResponseDto processProductsSequentially(List<ProductRequestDto> productRequestDTOs, boolean isUpdate) {
+    private ProductListResponseDto processProductsSequentially(List<ProductRequestDto> productRequestDTOs, boolean isUpdate) throws CustomException {
         List<ProductResponseDto> productResponseDtos = new ArrayList<>();
         for (ProductRequestDto requestDto : productRequestDTOs) {
             Product product = productMapper.toEntity(requestDto);

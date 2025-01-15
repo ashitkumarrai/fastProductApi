@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.retry.annotation.EnableRetry;
+
 import java.util.concurrent.TimeUnit;
 
 import static com.example.fastProductApi.service.ProductServiceForBulkCrud.executorService;
@@ -12,13 +14,12 @@ import static com.example.fastProductApi.service.ProductServiceForBulkCrud.execu
 
 @SpringBootApplication
 @EnableCaching
+@EnableRetry
 public class FastProductApiApplication {
     static Logger log = LoggerFactory.getLogger(FastProductApiApplication.class);
     public static void main(String[] args) {
         SpringApplication.run(FastProductApiApplication.class, args);
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            shutdownExecutor();
-        }));
+        Runtime.getRuntime().addShutdownHook(new Thread(FastProductApiApplication::shutdownExecutor));
     }
 
     // Shutdown ExecutorService gracefully

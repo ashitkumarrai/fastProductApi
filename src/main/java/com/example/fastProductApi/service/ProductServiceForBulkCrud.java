@@ -2,7 +2,11 @@ package com.example.fastProductApi.service;
 
 import com.example.fastProductApi.dto.*;
 import com.example.fastProductApi.entity.Product;
+import com.example.fastProductApi.exception.CustomException;
 import com.example.fastProductApi.mapper.ProductMapper;
+import com.example.fastProductApi.util.ConstantMessages;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -19,6 +23,8 @@ import java.util.stream.Collectors;
 public class ProductServiceForBulkCrud {
     @Autowired
     private ProductServiceForBasicCrud productServiceForBasicCrud;
+    static Logger log = LoggerFactory.getLogger(ProductServiceForBulkCrud.class);
+
 
     @Autowired
     private ProductMapper productMapper;
@@ -31,10 +37,17 @@ public class ProductServiceForBulkCrud {
      * @param ids List of product IDs to fetch.
      * @return List of Optional<Product> containing the fetched products.
      */
-    public List<Optional<Product>> getProductByIdsInSeq(List<Long> ids) {
-        return ids.stream()
-                .map(productServiceForBasicCrud::getProductById)
-                .collect(Collectors.toList());
+    public List<Optional<Product>> getProductByIdsInSeq(List<Long> ids) throws CustomException {
+        List<Optional<Product>> optionalProductList = new ArrayList<>();
+        try {
+            for (Long id : ids) {
+                optionalProductList.add(productServiceForBasicCrud.getProductById(id));
+            }
+        } catch (Exception ex) {
+            log.error(ConstantMessages.EXCEPTION_LOGGER, ex.getClass(), ex.getMessage());
+            throw new CustomException(ex);
+        }
+        return optionalProductList;
     }
 
     /**
@@ -43,14 +56,16 @@ public class ProductServiceForBulkCrud {
      * @param ids List of product IDs to fetch.
      * @return List of Optional<Product> containing the fetched products.
      */
-    public List<Optional<Product>> getProductByIdsInParallel(List<Long> ids) {
-        // Submit tasks for each product ID and collect futures
-        List<Future<Optional<Product>>> futures = ids.stream()
-                .map(id -> executorService.submit(() -> productServiceForBasicCrud.getProductById(id)))
-                .collect(Collectors.toList());
-
-        // Retrieve results from futures
-        return getFutureResults(futures, Optional.empty());
+    public List<Optional<Product>> getProductByIdsInParallel(List<Long> ids) throws CustomException {
+        try {
+            // Submit tasks for each product ID and collect futures
+            List<Future<Optional<Product>>> futures = ids.stream().map(id -> executorService.submit(() -> productServiceForBasicCrud.getProductById(id))).collect(Collectors.toList());
+            // Retrieve results from futures
+            return getFutureResults(futures, Optional.empty());
+        } catch (Exception ex) {
+            log.error(ConstantMessages.EXCEPTION_LOGGER, ex.getClass(), ex.getMessage());
+            throw new CustomException(ex);
+        }
     }
 
     /**
@@ -60,26 +75,28 @@ public class ProductServiceForBulkCrud {
      * @param isUpdate                    Flag to determine save or update operation.
      * @return ProductListResponseDto containing the operation results.
      */
-    public ProductListResponseDto saveOrUpdateProductInParallel(
-            UploadProductListRequestDto uploadProductListRequestDto, boolean isUpdate) {
+    public ProductListResponseDto saveOrUpdateProductInParallel(UploadProductListRequestDto uploadProductListRequestDto, boolean isUpdate) throws CustomException {
 
         List<ProductResponseDto> productResponseDtos = Collections.synchronizedList(new ArrayList<>());
+        try {
+            // Submit tasks for each product request
+            List<Future<Object>> futures = uploadProductListRequestDto.getProducts().stream().map(productRequestDto -> executorService.submit(() -> {
+                processProduct(productRequestDto, isUpdate, productResponseDtos);
+                return null;
+            })).collect(Collectors.toList());
 
-        // Submit tasks for each product request
-        List<Future<Object>> futures = uploadProductListRequestDto.getProducts().stream()
-                .map(productRequestDto -> executorService.submit(() -> {
-                    processProduct(productRequestDto, isUpdate, productResponseDtos);
-                    return null;
-                }))
-                .collect(Collectors.toList());
+            // Wait for all tasks to complete
+            waitForFutures(futures);
 
-        // Wait for all tasks to complete
-        waitForFutures(futures);
-
-        // Construct and return response
-        ProductListResponseDto responseDto = new ProductListResponseDto();
-        responseDto.setProducts(productResponseDtos);
-        return responseDto;
+            // Construct and return response
+            ProductListResponseDto responseDto = new ProductListResponseDto();
+            responseDto.setProducts(productResponseDtos);
+            responseDto.setResponseStatus(new ResponseStatusVo("SUCCESS", HttpStatus.CREATED.toString()));
+            return responseDto;
+        } catch (Exception ex) {
+            log.error(ConstantMessages.EXCEPTION_LOGGER, ex.getClass(), ex.getMessage());
+            throw new CustomException(ex);
+        }
     }
 
     /**
@@ -88,8 +105,13 @@ public class ProductServiceForBulkCrud {
      * @param ids List of product IDs to delete.
      * @return ProductsDeleteResponseDto containing the operation results.
      */
-    public ProductsDeleteResponseDto deleteByIdsInSeq(List<Long> ids) {
-        return deleteByIds(ids, false);
+    public ProductsDeleteResponseDto deleteByIdsInSeq(List<Long> ids) throws CustomException {
+        try {
+            return deleteByIds(ids, false);
+        } catch (CustomException ex) {
+            log.error(ConstantMessages.EXCEPTION_LOGGER, ex.getClass(), ex.getMessage());
+            throw new CustomException(ex);
+        }
     }
 
     /**
@@ -98,7 +120,7 @@ public class ProductServiceForBulkCrud {
      * @param ids List of product IDs to delete.
      * @return ProductsDeleteResponseDto containing the operation results.
      */
-    public ProductsDeleteResponseDto deleteByIdsInParallel(List<Long> ids) {
+    public ProductsDeleteResponseDto deleteByIdsInParallel(List<Long> ids) throws CustomException {
         return deleteByIds(ids, true);
     }
 
@@ -111,36 +133,30 @@ public class ProductServiceForBulkCrud {
      * @param isParallel Flag to determine parallel or sequential execution.
      * @return ProductsDeleteResponseDto containing the operation results.
      */
-    private ProductsDeleteResponseDto deleteByIds(List<Long> ids, boolean isParallel) {
-        List<Long> deletedProductIds = new ArrayList<>();
-        List<String> notDeletedProductIds = new ArrayList<>();
+    private ProductsDeleteResponseDto deleteByIds(List<Long> ids, boolean isParallel) throws CustomException {
+        List<Long> deletedProductIds = Collections.synchronizedList(new ArrayList<>());
+        List<String> notDeletedProductIds = Collections.synchronizedList(new ArrayList<>());
 
         if (isParallel) {
             // Parallel execution using ExecutorService
-            List<Future<Object>> futures = ids.stream()
-                    .map(id -> executorService.submit(() -> {
-                        processDeletion(id, deletedProductIds, notDeletedProductIds);
-                        return null;
-                    }))
-                    .collect(Collectors.toList());
+            List<Future<Object>> futures = ids.stream().map(id -> executorService.submit(() -> {
+                processDeletion(id, deletedProductIds, notDeletedProductIds);
+                return null;
+            })).collect(Collectors.toList());
 
             // Wait for all parallel tasks to complete
             waitForFutures(futures);
         } else {
             // Sequential execution
-            ids.forEach(id -> processDeletion(id, deletedProductIds, notDeletedProductIds));
+            for (Long id : ids) {
+                processDeletion(id, deletedProductIds, notDeletedProductIds);
+            }
         }
 
         // Prepare response DTO
         ProductsDeleteResponseDto responseDto = new ProductsDeleteResponseDto();
         responseDto.setDeletedProductIds(deletedProductIds);
-        responseDto.setResponseStatus(
-                notDeletedProductIds.isEmpty()
-                        ? new ResponseStatusVo("SUCCESS", HttpStatus.OK.toString())
-                        : new ResponseStatusVo(
-                        "Products not found for the following IDs to delete: " + String.join(", ", notDeletedProductIds),
-                        HttpStatus.PARTIAL_CONTENT.toString()
-                ));
+        responseDto.setResponseStatus(notDeletedProductIds.isEmpty() ? new ResponseStatusVo("SUCCESS", HttpStatus.OK.toString()) : new ResponseStatusVo("Products not found for the following IDs to delete: " + String.join(", ", notDeletedProductIds), HttpStatus.PARTIAL_CONTENT.toString()));
         return responseDto;
     }
 
@@ -152,7 +168,7 @@ public class ProductServiceForBulkCrud {
      * @param isUpdate            Flag for update or save operation.
      * @param productResponseDtos List to collect response DTOs.
      */
-    private void processProduct(ProductRequestDto productRequestDto, boolean isUpdate, List<ProductResponseDto> productResponseDtos) {
+    private void processProduct(ProductRequestDto productRequestDto, boolean isUpdate, List<ProductResponseDto> productResponseDtos) throws CustomException {
         Product product = productMapper.toEntity(productRequestDto);
 
         if (isUpdate) {
@@ -175,10 +191,10 @@ public class ProductServiceForBulkCrud {
      * @param deletedProductIds    List to collect deleted product IDs.
      * @param notDeletedProductIds List to collect IDs of products not found.
      */
-    private void processDeletion(Long id, List<Long> deletedProductIds, List<String> notDeletedProductIds) {
+    private void processDeletion(Long id, List<Long> deletedProductIds, List<String> notDeletedProductIds) throws CustomException {
         Optional<Product> product = productServiceForBasicCrud.getProductById(id);
         if (product.isPresent()) {
-            productServiceForBasicCrud.deleteProduct(id);
+            productServiceForBasicCrud.deleteProduct(product.get());
             deletedProductIds.add(id);
         } else {
             notDeletedProductIds.add(id.toString());
@@ -193,16 +209,15 @@ public class ProductServiceForBulkCrud {
      * @return List of results.
      */
     private <T> List<T> getFutureResults(List<Future<T>> futures, T defaultValue) {
-        return futures.stream()
-                .map(future -> {
-                    try {
-                        return future.get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        Thread.currentThread().interrupt();
-                        return defaultValue;
-                    }
-                })
-                .collect(Collectors.toList());
+        return futures.stream().map(future -> {
+            try {
+                return future.get();
+            } catch (InterruptedException | ExecutionException e) {
+                Thread.currentThread().interrupt();
+                log.error(ConstantMessages.EXCEPTION_LOGGER, e.getClass(), e.getMessage());
+                return defaultValue;
+            }
+        }).collect(Collectors.toList());
     }
 
     /**
@@ -216,7 +231,8 @@ public class ProductServiceForBulkCrud {
                 future.get();
             } catch (InterruptedException | ExecutionException e) {
                 Thread.currentThread().interrupt();
-                // Log or handle exception
+                log.error(ConstantMessages.EXCEPTION_LOGGER, e.getClass(), e.getMessage());
+
             }
         });
     }
