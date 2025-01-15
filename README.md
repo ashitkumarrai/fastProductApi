@@ -560,7 +560,7 @@ Test cases output screenshot for all components:
 
 
 
-## **Author & Developer **
+## **Author & Developer**
 - **Ashit Kumar Rai** 
 
 
