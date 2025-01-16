@@ -176,36 +176,68 @@ mvn spring-boot:run
     - `isParallel`: `true` for parallel processing (default), `false` for sequential.
 - **Response**:
     - **200 OK**: Products fetched successfully.
-        - Example:
-        ```json
-       { "product": [
+    - Example:
+    ```json
+    { 
+        "product": [
             {
-            "id": 3,
-            "name": "prd_2",
-            "description": "this is product 2",
-            "price": 950.75,
-            "stock": 95,
-            "createdAt": "2025-01-16 00:20:31",
-            "lastUpdatedAt": "2025-01-16 00:20:31"
+                "id": 3,
+                "name": "prd_2",
+                "description": "this is product 2",
+                "price": 950.75,
+                "stock": 95,
+                "createdAt": "2025-01-16 00:20:31",
+                "lastUpdatedAt": "2025-01-16 00:20:31"
             },
-           {
-            "id": 4,
-            "name": "prd_1",
-            "description": "this is product 1",
-            "price": 900.25,
-            "stock": 90,
-            "createdAt": "2025-01-16 00:20:31",
-            "lastUpdatedAt": "2025-01-16 00:20:31"
-           }
-                ],
-          "responseStatus": {
-              "message": "SUCCESS",
-              "status": "200 OK"
-                }
+            {
+                "id": 4,
+                "name": "prd_1",
+                "description": "this is product 1",
+                "price": 900.25,
+                "stock": 90,
+                "createdAt": "2025-01-16 00:20:31",
+                "lastUpdatedAt": "2025-01-16 00:20:31"
+            }
+        ],
+        "responseStatus": {
+            "message": "SUCCESS",
+            "status": "200 OK"
         }
+    }
+    ```
 
-        ```
+---
 
+- **206 PARTIAL_CONTENT**: Some products were not found.
+    - Example:
+    ```json
+    {
+        "product": [
+            {
+                "id": 1,
+                "name": "prd_1",
+                "description": "this is updated product 1",
+                "price": 101.99,
+                "stock": 40,
+                "createdAt": "2025-01-16 12:40:25",
+                "lastUpdatedAt": "2025-01-16 12:40:31"
+            },
+            {
+                "id": 2,
+                "name": "prd_2",
+                "description": "this is updated product 2",
+                "price": 101.99,
+                "stock": 20,
+                "createdAt": "2025-01-16 12:40:25",
+                "lastUpdatedAt": "2025-01-16 12:40:31"
+            }
+        ],
+        "responseStatus": {
+            "message": "Products not found for the following IDs: 3",
+            "status": "206 PARTIAL_CONTENT"
+        }
+    }
+    ```
 ---
 
 ### 2. **Upload Products**
@@ -340,13 +372,31 @@ mvn spring-boot:run
     - **200 OK**: Products deleted successfully.
         - Example:
         ```json
-       {"deletedProductIds": [1,2],
-          "responseStatus": {
-           "message": "SUCCESS",
-           "status": "200 OK"
-          }
-      }
+        {
+            "deletedProductIds": [1, 2],
+            "responseStatus": {
+                "message": "SUCCESS",
+                "status": "200 OK"
+            }
+        }
+        ```
+- **206 PARTIAL_CONTENT**: Some products were not found for deletion.
+        - Example:
+  ```json
+        {
+            "deletedProductIds": [
+                1,
+                2
+            ],
+            "responseStatus": {
+                "message": "Products not found for the following IDs to delete: 3",
+                "status": "206 PARTIAL_CONTENT"
+            }
+        }
+  ```
+
 ---
+
 
 ### **Important Notes**:
 - **Parallel Processing**: By default, bulk operations (e.g., upload, update, delete) are performed in parallel. To process them sequentially, use the `isParallel=false` query parameter.
@@ -500,23 +550,28 @@ mvn spring-boot:run
 ![image](https://github.com/user-attachments/assets/b404cc94-9dca-4913-99f1-84c75d92a087)
 
 
-### retry fall back Error mechanism on MYSQL db &b Its Error handling: 
+### Retry Fallback Error Mechanism on MySQL DB & Its Error Handling
 
-As per configuration: 
-•	Maximum Pool Size (maximum-pool-size: 10): Limits active DB connections to 10. If all are in use, further requests must wait.
-•	Connection Timeout (connection-timeout: 10000): If a DB connection can't be established within 10 seconds, it times out.
-•	Retry Settings:
-o	Max Retries (max-retries: 3): Tries 3 times if a DB connection fails.
-o	Initial Interval (initial-interval: 2000): Waits 2 seconds before retrying the connection.
-@Retryable Annotation:
-•	Max Attempts (maxAttempts = 3): Will retry the operation up to 3 times on failure.
-•	Backoff Delay (@Backoff(delay = 2000)): Waits 2 seconds between retries.
-What Happens:
-•	If DB connection fails:
-1.	Waits up to 10 seconds to connect.
-2.	Retries 3 times, each with a 2-second delay.
-3.	This can lead to almost  35 seconds of total delay due to retries.
-Screenshot of the tested working scenario: 
+As per configuration:
+
+- **Maximum Pool Size (`maximum-pool-size: 10`)**: Limits active DB connections to 10. If all are in use, further requests must wait.
+- **Connection Timeout (`connection-timeout: 10000`)**: If a DB connection can't be established within 10 seconds, it times out.
+- **Retry Settings**:
+    - **Max Retries (`max-retries: 3`)**: Tries 3 times if a DB connection fails.
+    - **Initial Interval (`initial-interval: 2000`)**: Waits 2 seconds before retrying the connection.
+
+#### `@Retryable` Annotation:
+
+- **Max Attempts (`maxAttempts = 3`)**: Will retry the operation up to 3 times on failure.
+- **Backoff Delay (`@Backoff(delay = 2000)`)**: Waits 2 seconds between retries.
+
+### What Happens:
+1. If DB connection fails:
+    1. Waits up to 10 seconds to connect.
+    2. Retries 3 times, each with a 2-second delay.
+    3. This can lead to almost **35 seconds** of total delay due to retries.
+
+#### Screenshot of the tested working scenario: 
 ![image](https://github.com/user-attachments/assets/b875f966-c54d-439f-a8e2-77130050e30e)
 ![image](https://github.com/user-attachments/assets/048e542b-1942-41b5-8e0e-3929ed63eff1)
 
@@ -524,25 +579,31 @@ Screenshot of the tested working scenario:
 
 
 
-### retry fall back Error mechanism on redis cache and  Its Error handling:
-•	The method is annotated with @Retryable, which retries the operation up to 3 times (maxAttempts = 3) if CustomException or RedisException occurs.
-•	There is a 2-second delay (@Backoff(delay = 2000)) between each retry attempt.
-•	The method computes the cache key '89' using @Cacheable and tries to retrieve or store data in Redis.
-•	When Redis is unavailable, the method throws a RedisException triggering the retry mechanism.
-•	The first attempt fails, followed by 3 retries, each delayed by 2 seconds.
-•	The retries (total of 6 seconds delay) contribute to the total API response time of near 6 seconds.
-•	If all retries fail, the method either throws an exception or returns a fallback value, depending on the implementation.
-•	The 5.38-second response time results from retry delays, time to process the request, and Redis connection failure.
-Screenshot of the tested working scenario: 
+### Retry Fallback Error Mechanism on Redis Cache and Its Error Handling:
+
+- The method is annotated with `@Retryable`, which retries the operation up to 3 times (`maxAttempts = 3`) if a `CustomException` or `RedisException` occurs.
+- There is a 2-second delay (`@Backoff(delay = 2000)`) between each retry attempt.
+- The method computes the cache key `'89'` using `@Cacheable` and tries to retrieve or store data in Redis.
+- When Redis is unavailable, the method throws a `RedisException`, triggering the retry mechanism.
+- The first attempt fails, followed by 3 retries, each delayed by 2 seconds.
+- The retries (total of 6 seconds delay) contribute to the total API response time of near **6 seconds**.
+- If all retries fail, the method either throws an exception or returns a fallback value, depending on the implementation.
+- The **5.38-second** response time results from retry delays, time to process the request, and Redis connection failure.
+
+#### Screenshot of the tested working scenario: 
 ![image](https://github.com/user-attachments/assets/b667ec6e-5f8a-430c-b2cf-75161a01b43f)
 
 ![image](https://github.com/user-attachments/assets/63b583c7-8bb2-4d52-aee5-c196cdc3d93a)
 
  
+### Cache Hits and Misses Logging and Performance of Each REST Method
 
-Cache hits and miss logging and performance of each rest, Intercepting all methods in classes annotated with @RestController using Spring-aop and logging the time taken for execution.
-commencing graceful shutdown (for executor-service and also by default tomcat embedded spring boot server)
-screenshot for working sceanrio: 
+- **Cache Logging**: Tracks cache hits and misses to monitor cache effectiveness.
+- **Performance Logging**: Logs the execution time for each REST method in `@RestController`-annotated classes using Spring AOP.
+- **AOP Interception**: Intercepts all methods in classes annotated with `@RestController` and logs the time taken for execution.
+- **Graceful Shutdown**:
+  - Ensures that the **Executor Service** completes tasks before shutdown and bydefault Gracefully shuts down the **Tomcat Embedded Spring Boot Server**, allowing in-progress HTTP requests to finish.
+**screenshot for working sceanrio:** 
 
 ![image](https://github.com/user-attachments/assets/85f1c1e9-3d0a-4b67-b373-811b5cd93201)
 
@@ -553,7 +614,7 @@ screenshot for working sceanrio:
  
 
 
-Test cases output screenshot for all components:
+### Test cases output screenshot for all components:
  ![image](https://github.com/user-attachments/assets/6d15d901-8136-4707-8f10-dc0a89466dca)
 
  
