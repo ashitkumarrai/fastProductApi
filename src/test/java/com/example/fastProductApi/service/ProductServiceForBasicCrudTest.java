@@ -3,20 +3,19 @@ package com.example.fastProductApi.service;
 import com.example.fastProductApi.entity.Product;
 import com.example.fastProductApi.exception.CustomException;
 import com.example.fastProductApi.repository.ProductRepository;
-import io.lettuce.core.RedisException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
-
+@ExtendWith(SpringExtension.class)
 class ProductServiceForBasicCrudTest {
 
     @Mock
@@ -35,8 +34,6 @@ class ProductServiceForBasicCrudTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
-
         product = new Product();
         product.setId(1L);
         product.setName("Test Product");

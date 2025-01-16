@@ -5,17 +5,18 @@ import com.example.fastProductApi.dto.*;
 import com.example.fastProductApi.entity.Product;
 import com.example.fastProductApi.exception.CustomException;
 import com.example.fastProductApi.mapper.ProductMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.math.BigDecimal;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(SpringExtension.class)
 class ProductServiceForBulkCrudTest {
 
     @Mock
@@ -26,11 +27,6 @@ class ProductServiceForBulkCrudTest {
 
     @InjectMocks
     private ProductServiceForBulkCrud productServiceForBulkCrud;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
 
     @Test
     void testGetProductByIdsInSeq() throws CustomException {

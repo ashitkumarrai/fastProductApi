@@ -6,13 +6,12 @@ import com.example.fastProductApi.exception.CustomException;
 import com.example.fastProductApi.mapper.ProductMapper;
 import com.example.fastProductApi.service.ProductServiceForBasicCrud;
 import com.example.fastProductApi.service.ProductServiceForBulkCrud;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
 import org.springframework.http.ResponseEntity;
-
+import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +19,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.*;
 
+@ExtendWith(SpringExtension.class)
 class ProductControllerTest {
 
     @InjectMocks
@@ -33,11 +33,6 @@ class ProductControllerTest {
 
     @Mock
     private ProductMapper productMapper;
-
-    @BeforeEach
-    void setUp() {
-        MockitoAnnotations.openMocks(this);
-    }
 
     @Test
     void getProductById_success() throws CustomException {
