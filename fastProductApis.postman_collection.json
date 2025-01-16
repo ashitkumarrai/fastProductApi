@@ -1,0 +1,209 @@
+{
+	"info": {
+		"_postman_id": "b584d8f5-6038-4e31-a147-0a361cb154c2",
+		"name": "fastProductApis",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "19686634",
+		"_collection_link": "https://www.postman.com/meriteam123/workspace/assignments/collection/19686634-b584d8f5-6038-4e31-a147-0a361cb154c2?action=share&source=collection_link&creator=19686634"
+	},
+	"item": [
+		{
+			"name": "get Products By Ids",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "*/*"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"ids\": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/products/getProductByIds?isParallel=true",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"products",
+						"getProductByIds"
+					],
+					"query": [
+						{
+							"key": "isParallel",
+							"value": "true"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "DELETE Products By Ids",
+			"request": {
+				"method": "DELETE",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "*/*"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"ids\": [17]\r\n}\r\n",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/products/deleteProductsByIds?isParallel=false",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"products",
+						"deleteProductsByIds"
+					],
+					"query": [
+						{
+							"key": "isParallel",
+							"value": "false"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "create Products",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "*/*"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"products\": [\n        {\n            \"name\": \"prd_21\",\n            \"description\": \"this is product 21\",\n            \"price\": \"900.25\",\n            \"stock\": \"90\"\n        },\n        {\n            \"name\": \"prd_22\",\n            \"description\": \"this is product 22\",\n            \"price\": \"950.75\",\n            \"stock\": \"95\"\n        },\n        {\n            \"name\": \"prd_23\",\n            \"description\": \"this is product 23\",\n            \"price\": \"1000.99\",\n            \"stock\": \"100\"\n        },\n        {\n            \"name\": \"prd_24\",\n            \"description\": \"this is product 24\",\n            \"price\": \"1050.50\",\n            \"stock\": \"105\"\n        },\n        {\n            \"name\": \"prd_25\",\n            \"description\": \"this is product 25\",\n            \"price\": \"1100.40\",\n            \"stock\": \"110\"\n        },\n        {\n            \"name\": \"prd_26\",\n            \"description\": \"this is product 26\",\n            \"price\": \"1150.30\",\n            \"stock\": \"115\"\n        },\n        {\n            \"name\": \"prd_27\",\n            \"description\": \"this is product 27\",\n            \"price\": \"1200.10\",\n            \"stock\": \"120\"\n        },\n        {\n            \"name\": \"prd_28\",\n            \"description\": \"this is product 28\",\n            \"price\": \"1250.60\",\n            \"stock\": \"125\"\n        },\n        {\n            \"name\": \"prd_29\",\n            \"description\": \"this is product 29\",\n            \"price\": \"1300.99\",\n            \"stock\": \"130\"\n        },\n        {\n            \"name\": \"prd_30\",\n            \"description\": \"this is product 30\",\n            \"price\": \"1350.75\",\n            \"stock\": \"135\"\n        },\n        {\n            \"name\": \"prd_31\",\n            \"description\": \"this is product 31\",\n            \"price\": \"1400.25\",\n            \"stock\": \"140\"\n        },\n        {\n            \"name\": \"prd_32\",\n            \"description\": \"this is product 32\",\n            \"price\": \"1450.99\",\n            \"stock\": \"145\"\n        },\n        {\n            \"name\": \"prd_33\",\n            \"description\": \"this is product 33\",\n            \"price\": \"1500.50\",\n            \"stock\": \"150\"\n        },\n        {\n            \"name\": \"prd_34\",\n            \"description\": \"this is product 34\",\n            \"price\": \"1550.40\",\n            \"stock\": \"155\"\n        },\n        {\n            \"name\": \"prd_35\",\n            \"description\": \"this is product 35\",\n            \"price\": \"1600.30\",\n            \"stock\": \"160\"\n        },\n        {\n            \"name\": \"prd_36\",\n            \"description\": \"this is product 36\",\n            \"price\": \"1650.10\",\n            \"stock\": \"165\"\n        },\n        {\n            \"name\": \"prd_37\",\n            \"description\": \"this is product 37\",\n            \"price\": \"1700.99\",\n            \"stock\": \"170\"\n        },\n        {\n            \"name\": \"prd_38\",\n            \"description\": \"this is product 38\",\n            \"price\": \"1750.75\",\n            \"stock\": \"175\"\n        },\n        {\n            \"name\": \"prd_39\",\n            \"description\": \"this is product 39\",\n            \"price\": \"1800.50\",\n            \"stock\": \"180\"\n        },\n        {\n            \"name\": \"prd_40\",\n            \"description\": \"this is product 40\",\n            \"price\": \"1850.25\",\n            \"stock\": \"185\"\n        }\n    ]\n}\n",
+					"options": {
+						"raw": {
+							"headerFamily": "json",
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/products/uploadProducts?isParallel=true",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"products",
+						"uploadProducts"
+					],
+					"query": [
+						{
+							"key": "isParallel",
+							"value": "true"
+						}
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "update Products by ids",
+			"request": {
+				"method": "PUT",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "Accept",
+						"value": "*/*"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"products\": [\n        {   \n            \"id\": 1,\n            \"name\": \"prd_1\",\n            \"description\": \"this is updated product 1\",\n            \"price\": \"101.99\",\n            \"stock\": \"40\"\n        },\n        {\n            \"id\": 2,\n            \"name\": \"prd_2\",\n            \"description\": \"this is updated product 2\",\n            \"price\": \"101.99\",\n            \"stock\": \"20\"\n        },\n        {\n            \"id\": 3,\n            \"name\": \"prd_3\",\n            \"description\": \"this is updated product 3\",\n            \"price\": \"102.99\",\n            \"stock\": \"30\"\n        },\n        {\n            \"id\": 4,\n            \"name\": \"prd_4\",\n            \"description\": \"this is updated product 4\",\n            \"price\": \"103.99\",\n            \"stock\": \"25\"\n        },\n        {\n            \"id\": 5,\n            \"name\": \"prd_5\",\n            \"description\": \"this is updated product 5\",\n            \"price\": \"104.99\",\n            \"stock\": \"15\"\n        },\n        {\n            \"id\": 6,\n            \"name\": \"prd_6\",\n            \"description\": \"this is updated product 6\",\n            \"price\": \"105.99\",\n            \"stock\": \"35\"\n        },\n        {\n            \"id\": 7,\n            \"name\": \"prd_7\",\n            \"description\": \"this is updated product 7\",\n            \"price\": \"106.99\",\n            \"stock\": \"45\"\n        },\n        {\n            \"id\": 8,\n            \"name\": \"prd_8\",\n            \"description\": \"this is updated product 8\",\n            \"price\": \"107.99\",\n            \"stock\": \"50\"\n        },\n        {\n            \"id\": 9,\n            \"name\": \"prd_9\",\n            \"description\": \"this is updated product 9\",\n            \"price\": \"108.99\",\n            \"stock\": \"55\"\n        },\n        {\n            \"id\": 10,\n            \"name\": \"prd_10\",\n            \"description\": \"this is updated product 10\",\n            \"price\": \"109.99\",\n            \"stock\": \"60\"\n        },\n        {\n            \"id\": 11,\n            \"name\": \"prd_11\",\n            \"description\": \"this is updated product 11\",\n            \"price\": \"110.99\",\n            \"stock\": \"65\"\n        },\n        {\n            \"id\": 12,\n            \"name\": \"prd_12\",\n            \"description\": \"this is updated product 12\",\n            \"price\": \"111.99\",\n            \"stock\": \"70\"\n        },\n        {\n            \"id\": 13,\n            \"name\": \"prd_13\",\n            \"description\": \"this is updated product 13\",\n            \"price\": \"112.99\",\n            \"stock\": \"75\"\n        },\n        {\n            \"id\": 14,\n            \"name\": \"prd_14\",\n            \"description\": \"this is updated product 14\",\n            \"price\": \"113.99\",\n            \"stock\": \"80\"\n        },\n        {\n            \"id\": 15,\n            \"name\": \"prd_15\",\n            \"description\": \"this is updated product 15\",\n            \"price\": \"114.99\",\n            \"stock\": \"85\"\n        },\n        {\n            \"id\": 16,\n            \"name\": \"prd_16\",\n            \"description\": \"this is updated product 16\",\n            \"price\": \"115.99\",\n            \"stock\": \"90\"\n        },\n        {\n            \"id\": 17,\n            \"name\": \"prd_17\",\n            \"description\": \"this is updated product 17\",\n            \"price\": \"116.99\",\n            \"stock\": \"95\"\n        },\n        {\n            \"id\": 18,\n            \"name\": \"prd_18\",\n            \"description\": \"this is updated product 18\",\n            \"price\": \"117.99\",\n            \"stock\": \"100\"\n        },\n        {\n            \"id\": 19,\n            \"name\": \"prd_19\",\n            \"description\": \"this is updated product 19\",\n            \"price\": \"118.99\",\n            \"stock\": \"105\"\n        },\n        {\n            \"id\": 20,\n            \"name\": \"prd_20\",\n            \"description\": \"this is updated product 20\",\n            \"price\": \"119.99\",\n            \"stock\": \"110\"\n        }\n    ]\n}\n",
+					"options": {
+						"raw": {
+							"headerFamily": "json",
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/products/updateProductsByIds?isParallel=true",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"products",
+						"updateProductsByIds"
+					],
+					"query": [
+						{
+							"key": "isParallel",
+							"value": "true"
+						}
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		}
+	]
+}
