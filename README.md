@@ -159,6 +159,7 @@ mvn spring-boot:run
 
 
 ## API Endpoints
+### Postman collection json file: [fastProductApis.postman_collection.json](https://github.com/ashitkumarrai/fastProductApi/blob/master/fastProductApis.postman_collection.json)
 ### API BASEPATH : http://localhost:8080/api/v1
 
 ---
