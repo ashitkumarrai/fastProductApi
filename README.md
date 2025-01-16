@@ -216,7 +216,7 @@ mvn spring-boot:run
             {
                 "id": 1,
                 "name": "prd_1",
-                "description": "this is updated product 1",
+                "description": "this is product 1",
                 "price": 101.99,
                 "stock": 40,
                 "createdAt": "2025-01-16 12:40:25",
@@ -225,7 +225,7 @@ mvn spring-boot:run
             {
                 "id": 2,
                 "name": "prd_2",
-                "description": "this is updated product 2",
+                "description": "this is product 2",
                 "price": 101.99,
                 "stock": 20,
                 "createdAt": "2025-01-16 12:40:25",
