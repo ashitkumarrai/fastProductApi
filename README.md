@@ -856,3 +856,78 @@ module.exports.handler = async (event) => {
 
 
 
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, BatchWriteCommand } = require('@aws-sdk/lib-dynamodb');
+const { v4: uuidv4 } = require('uuid');
+
+// Create vanilla DynamoDB client
+const client = new DynamoDBClient();
+
+// Create DocumentClient wrapper
+const docClient = DynamoDBDocumentClient.from(client);
+
+module.exports.handler = async (event) => {
+  try {
+    // Validate input
+    if (!event.body) {
+      return formatResponse(400, { error: 'Request body is missing' });
+    }
+
+    const body = JSON.parse(event.body);
+    const { classification, questions } = body;
+
+    if (!classification || !questions || !Array.isArray(questions)) {
+      return formatResponse(400, { error: 'classification and questions array are required' });
+    }
+
+    // Prepare batch write items (no manual marshalling needed)
+    const putRequests = questions.map(question => ({
+      PutRequest: {
+        Item: {
+          classification,
+          questionId: question.questionId || `q_${uuidv4()}`,
+          questionText: question.questionText,
+          createdAt: new Date().toISOString(),
+          modifiedAt: new Date().toISOString()
+        }
+      }
+    }));
+
+    // Process in batches of 25 (DynamoDB limit)
+    const batchSize = 25;
+    for (let i = 0; i < putRequests.length; i += batchSize) {
+      const batch = putRequests.slice(i, i + batchSize);
+      const command = new BatchWriteCommand({
+        RequestItems: {
+          [process.env.QUESTIONS_TABLE]: batch
+        }
+      });
+      await docClient.send(command);
+    }
+
+    return formatResponse(201, {
+      message: 'Questionnaires stored successfully',
+      classification,
+      count: questions.length
+    });
+  } catch (error) {
+    console.error('Error storing questionnaires:', error);
+    return formatResponse(500, { 
+      error: 'Internal server error',
+      details: error.message 
+    });
+  }
+};
+
+function formatResponse(statusCode, body) {
+  return {
+    statusCode,
+    body: JSON.stringify(body),
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    }
+  };
+}
+
+
