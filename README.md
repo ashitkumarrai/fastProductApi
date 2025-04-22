@@ -625,7 +625,82 @@ As per configuration:
 ## **Author & Developer**
 - **Ashit Kumar Rai** 
 
+import pandas as pd
+import requests
+import json
+from time import sleep
 
+def process_excel_to_api(excel_file, api_url, headers=None, batch_size=1, delay=0):
+    """
+    Read an Excel file and send each row as JSON payload to an API endpoint.
+    
+    Parameters:
+        excel_file (str): Path to the Excel file
+        api_url (str): API endpoint URL
+        headers (dict): Optional headers for the API request
+        batch_size (int): Number of rows to process at once (default 1)
+        delay (float): Delay in seconds between API calls (default 0)
+    """
+    try:
+        # Read the Excel file
+        df = pd.read_excel(excel_file)
+        
+        # Convert NaN values to None for proper JSON serialization
+        df = df.where(pd.notnull(df), None)
+        
+        # Process rows in batches
+        for i in range(0, len(df), batch_size):
+            batch = df.iloc[i:i+batch_size]
+            
+            # Process each row in the batch
+            for _, row in batch.iterrows():
+                # Convert row to dictionary
+                payload = row.to_dict()
+                
+                try:
+                    # Make API request
+                    response = requests.post(
+                        api_url,
+                        json=payload,
+                        headers=headers or {}
+                    )
+                    
+                    # Print results
+                    print(f"Row {_ + 1}: Status Code: {response.status_code}")
+                    print(f"Payload: {json.dumps(payload, indent=2)}")
+                    if response.text:
+                        print(f"Response: {response.text}")
+                    print("-" * 50)
+                    
+                    # Respect API rate limits
+                    if delay > 0:
+                        sleep(delay)
+                        
+                except requests.exceptions.RequestException as e:
+                    print(f"Error processing row {_ + 1}: {str(e)}")
+                    continue
+                    
+    except Exception as e:
+        print(f"Error reading Excel file: {str(e)}")
+
+# Example usage
+if __name__ == "__main__":
+    # Configuration
+    EXCEL_FILE = "data.xlsx"  # Path to your Excel file
+    API_URL = "https://api.example.com/endpoint"  # Your API endpoint
+    HEADERS = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer your_token_here"  # If authentication is needed
+    }
+    
+    # Process the Excel file
+    process_excel_to_api(
+        excel_file=EXCEL_FILE,
+        api_url=API_URL,
+        headers=HEADERS,
+        batch_size=1,  # Process one row at a time
+        delay=0.5  # Half-second delay between API calls
+    )
 
 
 
