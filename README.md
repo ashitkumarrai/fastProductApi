@@ -704,3 +704,155 @@ if __name__ == "__main__":
 
 
 
+
+
+
+service: questionnaire-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    QUESTIONS_TABLE: ${self:custom.questionsTable}
+    ANSWERS_TABLE: ${self:custom.answersTable}
+
+custom:
+  questionsTable: questionnaires-${sls:stage}
+  answersTable: questionnaire-answers-${sls:stage}
+
+functions:
+  storeQuestionnaires:
+    handler: src/handlers/storeQuestionnaires.handler
+    events:
+      - http:
+          path: /questionnaires
+          method: post
+          cors: true
+
+resources:
+  Resources:
+    QuestionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.questionsTable}
+        AttributeDefinitions:
+          - AttributeName: classification
+            AttributeType: S
+          - AttributeName: questionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: classification
+            KeyType: HASH
+          - AttributeName: questionId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+
+    AnswersTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.answersTable}
+        AttributeDefinitions:
+          - AttributeName: userId
+            AttributeType: S
+          - AttributeName: answerId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: userId
+            KeyType: HASH
+          - AttributeName: answerId
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+
+
+const AWS = require('aws-sdk');
+const { v4: uuidv4 } = require('uuid');
+const documentClient = new AWS.DynamoDB.DocumentClient();
+
+module.exports.handler = async (event) => {
+  try {
+    // Validate input
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Request body is missing' })
+      };
+    }
+
+    const body = JSON.parse(event.body);
+    const { classification, questions } = body;
+
+    if (!classification || !questions || !Array.isArray(questions)) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'classification and questions array are required' })
+      };
+    }
+
+    // Prepare questions for storage
+    const putRequests = questions.map(question => ({
+      PutRequest: {
+        Item: {
+          classification,
+          questionId: question.questionId || `q_${uuidv4()}`,
+          questionText: question.questionText,
+          createdAt: new Date().toISOString(),
+          modifiedAt: new Date().toISOString()
+        }
+      }
+    }));
+
+    // Batch write in chunks of 25 (DynamoDB limit)
+    const batchSize = 25;
+    for (let i = 0; i < putRequests.length; i += batchSize) {
+      const batch = putRequests.slice(i, i + batchSize);
+      await documentClient.batchWrite({
+        RequestItems: {
+          [process.env.QUESTIONS_TABLE]: batch
+        }
+      }).promise();
+    }
+
+    return {
+      statusCode: 201,
+      body: JSON.stringify({
+        message: 'Questionnaires stored successfully',
+        classification,
+        count: questions.length
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    };
+  } catch (error) {
+    console.error('Error storing questionnaires:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ 
+        error: 'Internal server error',
+        details: error.message 
+      })
+    };
+  }
+};
+
+
+
+{
+  "classification": "customer_feedback",
+  "questions": [
+    {
+      "questionText": "How would you rate our service?"
+    },
+    {
+      "questionId": "feedback_comments",
+      "questionText": "Any additional comments?"
+    }
+  ]
+}
+
+
+
