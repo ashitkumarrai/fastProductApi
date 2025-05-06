@@ -1177,3 +1177,73 @@ public class PrintController {
 
 
 
+
+
+@Configuration
+@EnableBatchProcessing
+public class SimpleBatchConfig {
+
+    @Bean
+    public Job printJob(JobRepository jobRepository, Step printStep) {
+        return new JobBuilder("simplePrintJob", jobRepository)
+                .start(printStep)
+                .build();
+    }
+
+    @Bean
+    public Step printStep(JobRepository jobRepository, 
+                        PlatformTransactionManager transactionManager,
+                        ItemReader<String> reader,
+                        ItemWriter<String> writer) {
+        return new StepBuilder("printStep", jobRepository)
+                .<String, String>chunk(10, transactionManager) // Process 10 at a time
+                .reader(reader)
+                .writer(writer)
+                .faultTolerant()
+                .skipLimit(100) // Max 100 failed documents
+                .skip(Exception.class) // Skip on any error
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public ItemReader<String> documentReader(
+            @Value("#{jobParameters['filePaths']}") List<String> filePaths) {
+        return new IteratorItemReader<>(filePaths);
+    }
+
+    @Bean
+    public ItemWriter<String> documentWriter(PrinterService printerService) {
+        return items -> {
+            for (String filePath : items) {
+                printerService.printWithRetry(filePath);
+            }
+            // Any post-processing for this chunk can go here
+            System.out.println("Processed chunk of " + items.size() + " documents");
+        };
+    }
+}
+
+
+@Service
+public class SimpleJobLauncher {
+    private final JobLauncher jobLauncher;
+    private final Job printJob;
+
+    public SimpleJobLauncher(JobLauncher jobLauncher, 
+                           @Qualifier("printJob") Job printJob) {
+        this.jobLauncher = jobLauncher;
+        this.printJob = printJob;
+    }
+
+    public void launchJob(List<String> filePaths) throws Exception {
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addLong("startTime", System.currentTimeMillis())
+                .addParameter("filePaths", new JobParameter<>(filePaths, List.class))
+                .toJobParameters();
+
+        jobLauncher.run(printJob, jobParameters);
+    }
+}
+
+
