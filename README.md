@@ -931,3 +931,249 @@ function formatResponse(statusCode, body) {
 }
 
 
+
+
+@Configuration
+@EnableBatchProcessing
+public class BatchConfig {
+
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+    
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+    
+    @Autowired
+    private DataSource dataSource; // Your existing MS SQL datasource
+
+    @Bean
+    public Job printDocumentsJob() {
+        return jobBuilderFactory.get("printDocumentsJob")
+                .incrementer(new RunIdIncrementer())
+                .start(printStep())
+                .next(postProcessStep())
+                .build();
+    }
+
+    @Bean
+    public Step printStep() {
+        return stepBuilderFactory.get("printStep")
+                .<String, String>chunk(10)
+                .reader(documentReader(null))
+                .processor(documentProcessor())
+                .writer(documentWriter())
+                .faultTolerant()
+                .skipLimit(100)
+                .skip(Exception.class)
+                .build();
+    }
+
+    @Bean
+    public Step postProcessStep() {
+        return stepBuilderFactory.get("postProcessStep")
+                .tasklet(postProcessTasklet())
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public ItemReader<String> documentReader(
+            @Value("#{jobParameters['filePaths']}") List<String> filePaths) {
+        return new IteratorItemReader<>(filePaths);
+    }
+
+    @Bean
+    public ItemProcessor<String, String> documentProcessor() {
+        return filePath -> {
+            // Any preprocessing logic
+            return filePath;
+        };
+    }
+
+    @Bean
+    public ItemWriter<String> documentWriter() {
+        return items -> {
+            for (String filePath : items) {
+                // Your print logic
+            }
+        };
+    }
+
+    @Bean
+    public Tasklet postProcessTasklet() {
+        return (contribution, chunkContext) -> {
+            // Access job context data
+            int printedCount = (int) chunkContext.getStepContext()
+                .getJobExecutionContext()
+                .get("printedCount");
+            
+            // Your post-processing logic
+            System.out.println("Total printed: " + printedCount);
+            return RepeatStatus.FINISHED;
+        };
+    }
+}
+
+@Service
+public class PrintJobLauncher {
+
+    @Autowired
+    private JobLauncher jobLauncher;
+    
+    @Autowired
+    private Job printDocumentsJob;
+    
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    public Long launchPrintJob(List<String> filePaths) throws Exception {
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addLong("time", System.currentTimeMillis())
+                .addParameter("filePaths", 
+                    new JobParameter<>(filePaths, List.class))
+                .toJobParameters();
+        
+        JobExecution execution = jobLauncher.run(printDocumentsJob, jobParameters);
+        
+        // You can store additional metadata in your existing tables
+        jdbcTemplate.update(
+            "INSERT INTO print_jobs (job_id, start_time, document_count) VALUES (?, ?, ?)",
+            execution.getJobId(),
+            new Timestamp(System.currentTimeMillis()),
+            filePaths.size()
+        );
+        
+        return execution.getJobId();
+    }
+}
+
+
+
+
+
+
+..
+@Configuration
+@EnableBatchProcessing
+public class PrintJobConfig {
+
+    @Autowired
+    private JobBuilderFactory jobBuilderFactory;
+    
+    @Autowired
+    private StepBuilderFactory stepBuilderFactory;
+    
+    @Autowired
+    private PrinterService printerService;
+
+    @Bean
+    public Job documentPrintingJob() {
+        return jobBuilderFactory.get("documentPrintingJob")
+                .start(printDocumentsStep())
+                .next(postProcessingStep())  // Simple tasklet for post-job work
+                .build();
+    }
+
+    @Bean
+    public Step printDocumentsStep() {
+        return stepBuilderFactory.get("printDocumentsStep")
+                .<String, String>chunk(10)  // Process 10 documents at a time
+                .reader(documentReader(null))
+                .writer(documentWriter())
+                .faultTolerant()
+                .retryLimit(3)  // Retry up to 3 times
+                .retry(Exception.class)  // Retry on any exception
+                .build();
+    }
+
+    @Bean
+    public Step postProcessingStep() {
+        return stepBuilderFactory.get("postProcessingStep")
+                .tasklet((contribution, chunkContext) -> {
+                    // Your one-time post-job operations here
+                    System.out.println("Executing post-print cleanup");
+                    return RepeatStatus.FINISHED;
+                })
+                .build();
+    }
+
+    @Bean
+    @StepScope
+    public ItemReader<String> documentReader(
+            @Value("#{jobParameters['filePaths']}") List<String> filePaths) {
+        return new IteratorItemReader<>(filePaths);
+    }
+
+    @Bean
+    public ItemWriter<String> documentWriter() {
+        return items -> {
+            for (String filePath : items) {
+                printerService.printDocument(filePath);
+            }
+        };
+    }
+}
+
+
+
+@Service
+public class PrinterService {
+    
+    @Retryable(value = Exception.class, maxAttempts = 3, backoff = @Backoff(delay = 1000))
+    public void printDocument(String filePath) throws Exception {
+        PrintService printer = PrintServiceLookup.lookupDefaultPrintService();
+        if (printer == null) {
+            throw new IllegalStateException("No printer available");
+        }
+        
+        try (FileInputStream fis = new FileInputStream(filePath)) {
+            Doc doc = new SimpleDoc(fis, DocFlavor.INPUT_STREAM.AUTOSENSE, null);
+            PrintRequestAttributeSet attributes = new HashPrintRequestAttributeSet();
+            attributes.add(new Copies(1));
+            
+            printer.createPrintJob().print(doc, attributes);
+        }
+    }
+    
+    @Recover
+    public void recoverPrint(Exception e, String filePath) {
+        System.err.println("Failed to print after 3 attempts: " + filePath);
+        // Optionally log to database or error tracking system
+    }
+}
+
+
+
+
+
+
+
+@RestController
+@RequestMapping("/api/print")
+public class PrintController {
+
+    @Autowired
+    private PrintJobLauncher printJobLauncher;
+
+    @PostMapping("/batch")
+    public ResponseEntity<Map<String, Object>> startPrintJob(
+            @RequestBody List<String> filePaths) {
+        try {
+            Long jobId = printJobLauncher.launchPrintJob(filePaths);
+            return ResponseEntity.ok(Map.of(
+                "jobId", jobId,
+                "message", "Print job started",
+                "documentCount", filePaths.size()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of(
+                "error", "Failed to start job",
+                "details", e.getMessage()
+            ));
+        }
+    }
+}
+
+
+
+
