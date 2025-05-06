@@ -1246,4 +1246,34 @@ public class SimpleJobLauncher {
     }
 }
 
+import org.springframework.core.io.ResourceLoader;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
+import org.springframework.jdbc.datasource.init.DataSourceInitializer;
+import javax.sql.DataSource;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
+@Configuration
+public class BatchTableForceInitializer {
+
+    @Bean
+    public DataSourceInitializer batchTablesInitializer(DataSource dataSource, 
+                                                     ResourceLoader resourceLoader) {
+        // 1. Load the SQL Server specific schema script
+        ResourceDatabasePopulator populator = new ResourceDatabasePopulator();
+        populator.addScript(resourceLoader.getResource(
+            "classpath:org/springframework/batch/core/schema-sqlserver.sql"));
+        
+        // 2. Critical for SQL Server - handle batch separators
+        populator.setSeparator("GO");
+        populator.setContinueOnError(false);
+        
+        // 3. Force initialization
+        DataSourceInitializer initializer = new DataSourceInitializer();
+        initializer.setDataSource(dataSource);
+        initializer.setDatabasePopulator(populator);
+        initializer.setEnabled(true);
+        
+        return initializer;
+    }
+}
