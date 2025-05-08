@@ -1487,3 +1487,23 @@ BEGIN
     PRINT 'Dropped sequence BATCH_JOB_SEQ'
 END
 GO
+
+
+
+
+
+
+
+$pdfPath = "C:\Path\To\YourFile.pdf"
+$printerName = "Your Printer Name"
+$powerPDFPath = "C:\Path\To\PowerPDF.exe"
+
+try {
+    Start-Process -FilePath $powerPDFPath -ArgumentList @('"/P"', "`"$pdfPath`"", "`"$printerName`"") -Wait -NoNewWindow
+    Write-Output "Printing completed successfully - $pdfPath sent to $printerName"
+    exit 0
+}
+catch {
+    Write-Output "Error: $_"
+    exit 1
+}
