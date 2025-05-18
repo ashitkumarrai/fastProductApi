@@ -1662,3 +1662,73 @@ async function getQuestionsByClassification(documentClassification) {
 
 // Example usage
 getQuestionsByClassification("Invoice");
+
+
+
+service: sqs-to-dynamodb-listener
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    DYNAMO_TABLE: YourExistingTableName
+    SQS_QUEUE_URL: https://sqs.us-east-1.amazonaws.com/your-account-id/your-queue-name
+
+functions:
+  sqsListener:
+    handler: handler.processMessages
+    timeout: 30
+    events:
+      - sqs:
+          arn: arn:aws:sqs:us-east-1:your-account-id:your-queue-name
+          batchSize: 1 # Process messages one at a time
+
+
+// Import AWS SDK v3 clients
+const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { SQSClient, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
+
+// Initialize clients
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const sqsClient = new SQSClient({ region: process.env.AWS_REGION });
+
+exports.processMessages = async (event) => {
+  console.log('Processing SQS messages...');
+  
+  // Process each message
+  for (const record of event.Records) {
+    try {
+      const message = JSON.parse(record.body);
+      
+      // Prepare DynamoDB item
+      const params = {
+        TableName: process.env.DYNAMO_TABLE,
+        Item: {
+          messageId: { S: record.messageId },  // Primary key
+          body: { S: record.body },
+          receivedAt: { S: new Date().toISOString() },
+          // Add any additional fields from your message
+          ...(message.data && { data: { S: JSON.stringify(message.data) }})
+        }
+      };
+
+      // Save to DynamoDB
+      await dynamoClient.send(new PutItemCommand(params));
+      console.log(`Saved message ${record.messageId} to DynamoDB`);
+
+      // Delete processed message from queue
+      await sqsClient.send(new DeleteMessageCommand({
+        QueueUrl: process.env.SQS_QUEUE_URL,
+        ReceiptHandle: record.receiptHandle
+      }));
+
+    } catch (error) {
+      console.error('Error processing message:', error);
+      // Message will remain in queue if we throw error
+      throw error;
+    }
+  }
+
+  return { processed: event.Records.length };
+};
