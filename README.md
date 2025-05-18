@@ -1632,3 +1632,33 @@ resources:
 plugins:
   - serverless-iam-roles-per-function
   - serverless-bundle # Recommended for optimal packaging
+
+
+
+const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+const { DynamoDBDocumentClient, QueryCommand } = require("@aws-sdk/lib-dynamodb");
+
+const client = new DynamoDBClient({ region: "us-east-1" });
+const docClient = DynamoDBDocumentClient.from(client);
+
+async function getQuestionsByClassification(documentClassification) {
+  const params = {
+    TableName: "YourTableName", // Replace with your table name
+    KeyConditionExpression: "documentClassification = :dc",
+    ExpressionAttributeValues: {
+      ":dc": documentClassification
+    }
+  };
+
+  try {
+    const data = await docClient.send(new QueryCommand(params));
+    console.log("Questions:", data.Items);
+    return data.Items;
+  } catch (error) {
+    console.error("Query error:", error);
+    throw error;
+  }
+}
+
+// Example usage
+getQuestionsByClassification("Invoice");
