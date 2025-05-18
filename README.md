@@ -1493,17 +1493,142 @@ GO
 
 
 
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 
-$pdfPath = "C:\Path\To\YourFile.pdf"
-$printerName = "Your Printer Name"
-$powerPDFPath = "C:\Path\To\PowerPDF.exe"
+const sqs = new SQSClient({ region: process.env.AWS_REGION });
 
-try {
-    Start-Process -FilePath $powerPDFPath -ArgumentList @('"/P"', "`"$pdfPath`"", "`"$printerName`"") -Wait -NoNewWindow
-    Write-Output "Printing completed successfully - $pdfPath sent to $printerName"
-    exit 0
-}
-catch {
-    Write-Output "Error: $_"
-    exit 1
-}
+export const handler = async (event) => {
+  try {
+    // Validate payload
+    if (!event.body) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Empty payload' }),
+      };
+    }
+
+    const payload = JSON.parse(event.body);
+
+    // Prepare SQS message
+    const params = {
+      QueueUrl: process.env.SQS_QUEUE_URL,
+      MessageBody: JSON.stringify(payload),
+      MessageAttributes: {
+        Source: {
+          DataType: 'String',
+          StringValue: 'doc-intelligence-api',
+        },
+        Timestamp: {
+          DataType: 'String',
+          StringValue: new Date().toISOString(),
+        },
+      },
+    };
+
+    // Send to SQS
+    await sqs.send(new SendMessageCommand(params));
+
+    return {
+      statusCode: 202,
+      body: JSON.stringify({ 
+        message: 'Document processing accepted',
+        status: 'queued',
+        queueUrl: process.env.SQS_QUEUE_URL,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+  } catch (error) {
+    console.error('Error:', error);
+    return {
+      statusCode: error.statusCode || 500,
+      body: JSON.stringify({
+        error: error.message,
+        stack: process.env.STAGE === 'dev' ? error.stack : undefined,
+      }),
+    };
+  }
+};
+
+
+
+
+service: doc-intelligence
+frameworkVersion: '3'
+
+configValidationMode: error # Strict config validation
+useDotenv: true # Load environment variables from .env file
+
+custom:
+  defaultStage: dev
+  sqsQueueName: doc-intelligence-queue
+  environments:
+    dev:
+      sqsQueueArn: arn:aws:sqs:${aws:region}:${aws:accountId}:${self:custom.sqsQueueName}-dev
+      logRetention: 7
+      timeout: 10
+    staging:
+      sqsQueueArn: arn:aws:sqs:${aws:region}:${aws:accountId}:${self:custom.sqsQueueName}-staging
+      logRetention: 14
+      timeout: 15
+    prod:
+      sqsQueueArn: arn:aws:sqs:${aws:region}:${aws:accountId}:${self:custom.sqsQueueName}-prod
+      logRetention: 30
+      timeout: 15
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  architecture: arm64 # Graviton2 processor for better performance/cost
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, self:custom.defaultStage}
+  httpApi:
+    cors: true
+    payload: '2.0'
+  environment:
+    SQS_QUEUE_URL: https://sqs.${aws:region}.amazonaws.com/${aws:accountId}/${self:custom.sqsQueueName}-${sls:stage}
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1 # Improves Lambda performance
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:GetQueueAttributes
+          Resource: ${self:custom.environments.${sls:stage}.sqsQueueArn}
+
+functions:
+  processDocument:
+    handler: src/handlers/processDocument.handler
+    description: Processes documents and sends to SQS
+    events:
+      - httpApi:
+          path: /documents
+          method: POST
+    environment:
+      STAGE: ${sls:stage}
+    timeout: ${self:custom.environments.${sls:stage}.timeout}
+    memorySize: 512 # MB
+    package:
+      patterns:
+        - '!./**' # Exclude all
+        - './src/handlers/processDocument.js'
+        - './node_modules/**'
+
+resources:
+  extensions:
+    ApiGatewayAccessLogs:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /aws/apigateway/${self:service}-${sls:stage}
+        RetentionInDays: ${self:custom.environments.${sls:stage}.logRetention}
+    LambdaLogGroup:
+      Type: AWS::Logs::LogGroup
+      Properties:
+        LogGroupName: /aws/lambda/${self:service}-${sls:stage}-processDocument
+        RetentionInDays: ${self:custom.environments.${sls:stage}.logRetention}
+
+plugins:
+  - serverless-iam-roles-per-function
+  - serverless-bundle # Recommended for optimal packaging
