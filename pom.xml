@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+to<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
@@ -78,3 +78,33 @@
 		</plugins>
 	</build>
 </project>
+
+
+
+function generateSgtToken() {
+    // Get current date in Singapore Time (SGT is UTC+8)
+    const now = new Date();
+    const sgtOffset = 8 * 60 * 60 * 1000;
+    const sgtTime = new Date(now.getTime() + sgtOffset);
+    
+    // Format as DDMMYYYYHHMMSS (14 digits)
+    const day = String(sgtTime.getUTCDate()).padStart(2, '0');
+    const month = String(sgtTime.getUTCMonth() + 1).padStart(2, '0');
+    const year = sgtTime.getUTCFullYear();
+    const hours = String(sgtTime.getUTCHours()).padStart(2, '0');
+    const minutes = String(sgtTime.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(sgtTime.getUTCSeconds()).padStart(2, '0');
+    
+    // Create timestamp portion
+    const timestampPart = `${day}${month}${year}${hours}${minutes}${seconds}`;
+    
+    // Generate 2 random digits (00-99)
+    const randomPart = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+    
+    // Combine to make 16 digits
+    return timestampPart + randomPart;
+}
+
+// Example usage
+const token = generateSgtToken();
+console.log('Generated token:', token); // e.g. "2405202509345298" (DDMMYYYYHHMMSSRR)
