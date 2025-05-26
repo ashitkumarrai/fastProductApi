@@ -1732,3 +1732,45 @@ exports.processMessages = async (event) => {
 
   return { processed: event.Records.length };
 };
+
+
+resources:
+  Resources:
+    QuestionTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: QuestionTable
+        BillingMode: PAY_PER_REQUEST  # On-demand/pay-per-request billing
+        AttributeDefinitions:
+          - AttributeName: awai_token
+            AttributeType: S
+          - AttributeName: computationId
+            AttributeType: S
+          - AttributeName: claimNo
+            AttributeType: S
+          - AttributeName: caseId
+            AttributeType: S
+          - AttributeName: timeStamp
+            AttributeType: N
+        KeySchema:
+          - AttributeName: awai_token
+            KeyType: HASH  # Partition key
+        GlobalSecondaryIndexes:
+          - IndexName: ComputationIdIndex
+            KeySchema:
+              - AttributeName: computationId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: CaseIdIndex
+            KeySchema:
+              - AttributeName: caseId
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+          - IndexName: ClaimNoIndex
+            KeySchema:
+              - AttributeName: claimNo
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
