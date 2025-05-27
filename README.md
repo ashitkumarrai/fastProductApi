@@ -1735,19 +1735,46 @@ exports.processMessages = async (event) => {
 
 const { URL } = require('url');
 
-const getS3Key = (presignedUrl) => {
+const extractS3Details = (presignedUrl) => {
   try {
-    if (!presignedUrl) throw new Error('URL is required');
-    const { pathname } = new URL(presignedUrl);
+    if (!presignedUrl?.trim()) throw new Error('URL is empty or invalid');
+    
+    // 1. Extract key from path
+    const { pathname, searchParams } = new URL(presignedUrl);
     const key = pathname.split('/').slice(2).join('/').split('?')[0];
-    if (!key) throw new Error('Invalid S3 URL format - no key found');
-    return key;
+    if (!key) throw new Error('No S3 key found');
+
+    // 2. Find filename in query parameters (supports both 'filename=' and 'response-content-disposition=')
+    let documentName = searchParams.get('filename') || 
+                      searchParams.get('response-content-disposition')?.match(/filename="?([^"]+)"?/i)?.[1];
+    
+    // 3. Fallback: Extract from URL-encoded ending (e.g., '...filename%3Ddoc.pdf')
+    if (!documentName) {
+      const urlEnding = presignedUrl.split('=').pop();
+      documentName = decodeURIComponent(urlEnding).replace(/[^\w.-]/g, '');
+    }
+
+    if (!documentName) throw new Error('No document name found in URL');
+    
+    return { key, documentName };
   } catch (err) {
-    console.error(`Failed to extract S3 key: ${err.message}`);
-    return null;
+    console.error(`Extraction failed: ${err.message}`);
+    return { key: null, documentName: null };
   }
 };
 
-// Example usage
-const key = getS3Key('https://my-bucket.s3.amazonaws.com/folder/file.pdf?X-Amz-Signature=abc');
-console.log(key); // "folder/file.pdf"
+// Test Cases
+console.log(extractS3Details(
+  'https://bucket.s3.amazonaws.com/path/to/key?X-Amz-Algorithm=123&filename=report.pdf'
+));
+// { key: 'path/to/key', documentName: 'report.pdf' }
+
+console.log(extractS3Details(
+  'https://s3.amazonaws.com/bucket/path?response-content-disposition=attachment%3B%20filename%3D%22contract.docx%22'
+));
+// { key: 'path', documentName: 'contract.docx' }
+
+console.log(extractS3Details(
+  'https://bucket.s3.eu-west-1.amazonaws.com/data?X-Amz-Signature=abc&filename%3Ddata.csv'
+));
+// { key: 'data', documentName: 'da
