@@ -1733,48 +1733,30 @@ exports.processMessages = async (event) => {
   return { processed: event.Records.length };
 };
 
-const { URL } = require('url');
+import os
+import shutil
 
-const extractS3Details = (presignedUrl) => {
-  try {
-    if (!presignedUrl?.trim()) throw new Error('URL is empty or invalid');
-    
-    // 1. Extract key from path
-    const { pathname, searchParams } = new URL(presignedUrl);
-    const key = pathname.split('/').slice(2).join('/').split('?')[0];
-    if (!key) throw new Error('No S3 key found');
+def smart_copy(src_dir, dst_dir):
+    for root, _, files in os.walk(src_dir):
+        for file in files:
+            src_path = os.path.join(root, file)
+            rel_path = os.path.relpath(root, src_dir)
+            
+            # Apply rules directly to the path string
+            if rel_path.startswith('AU'):
+                new_rel_path = rel_path.replace('AU', 'Australia_')
+            elif rel_path.startswith('US'):
+                new_rel_path = rel_path.replace('US', 'USA_')
+            else:
+                new_rel_path = rel_path  # No changes
+            
+            # Build destination path
+            dst_path = os.path.join(dst_dir, new_rel_path, file)
+            
+            # Create dirs and copy
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            shutil.copy2(src_path, dst_path)
+            print(f"Copied: {src_path} → {dst_path}")
 
-    // 2. Find filename in query parameters (supports both 'filename=' and 'response-content-disposition=')
-    let documentName = searchParams.get('filename') || 
-                      searchParams.get('response-content-disposition')?.match(/filename="?([^"]+)"?/i)?.[1];
-    
-    // 3. Fallback: Extract from URL-encoded ending (e.g., '...filename%3Ddoc.pdf')
-    if (!documentName) {
-      const urlEnding = presignedUrl.split('=').pop();
-      documentName = decodeURIComponent(urlEnding).replace(/[^\w.-]/g, '');
-    }
-
-    if (!documentName) throw new Error('No document name found in URL');
-    
-    return { key, documentName };
-  } catch (err) {
-    console.error(`Extraction failed: ${err.message}`);
-    return { key: null, documentName: null };
-  }
-};
-
-// Test Cases
-console.log(extractS3Details(
-  'https://bucket.s3.amazonaws.com/path/to/key?X-Amz-Algorithm=123&filename=report.pdf'
-));
-// { key: 'path/to/key', documentName: 'report.pdf' }
-
-console.log(extractS3Details(
-  'https://s3.amazonaws.com/bucket/path?response-content-disposition=attachment%3B%20filename%3D%22contract.docx%22'
-));
-// { key: 'path', documentName: 'contract.docx' }
-
-console.log(extractS3Details(
-  'https://bucket.s3.eu-west-1.amazonaws.com/data?X-Amz-Signature=abc&filename%3Ddata.csv'
-));
-// { key: 'data', documentName: 'da
+# Usage
+smart_copy('/path/to/source', '/path/to/destination')
