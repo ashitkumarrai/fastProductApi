@@ -1760,3 +1760,49 @@ def smart_copy(src_dir, dst_dir):
 
 # Usage
 smart_copy('/path/to/source', '/path/to/destination')
+
+
+
+
+
+import os
+import shutil
+from datetime import datetime
+
+def smart_copy(src_dir, dst_dir, log_file="copy_log.txt"):
+    # Create log file with timestamp
+    with open(log_file, 'a') as f:
+        f.write(f"\nCopy Operation - {datetime.now()}\n")
+        f.write("="*50 + "\n")
+    
+    for root, _, files in os.walk(src_dir):
+        for file in files:
+            src_path = os.path.join(root, file)
+            rel_path = os.path.relpath(root, src_dir)
+            
+            # Apply naming rules
+            if rel_path.startswith('AU'):
+                new_rel_path = rel_path.replace('AU', 'Australia_')
+            elif rel_path.startswith('US'):
+                new_rel_path = rel_path.replace('US', 'USA_')
+            else:
+                new_rel_path = rel_path
+            
+            dst_path = os.path.join(dst_dir, new_rel_path, file)
+            
+            # Create dirs if needed
+            os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+            
+            try:
+                shutil.copy2(src_path, dst_path)
+                log_msg = f"SUCCESS: {src_path} → {dst_path}"
+            except Exception as e:
+                log_msg = f"FAILED: {src_path} | Error: {str(e)}"
+            
+            # Write to log file and print
+            with open(log_file, 'a') as f:
+                f.write(log_msg + "\n")
+            print(log_msg)
+
+# Usage - logs will be saved to copy_log.txt
+smart_copy('/path/to/source', '/path/to/destination')
