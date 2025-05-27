@@ -1733,44 +1733,20 @@ exports.processMessages = async (event) => {
   return { processed: event.Records.length };
 };
 
+const getS3Details = (presignedUrl) => {
+  try {
+    if (!presignedUrl) throw new Error('URL is required');
+    const { hostname, pathname } = new URL(presignedUrl);
+    const bucket = hostname.split('.')[0];
+    const key = pathname.split('/').slice(2).join('/').split('?')[0];
+    if (!bucket || !key) throw new Error('Invalid S3 URL format');
+    return { bucket, key };
+  } catch (err) {
+    console.error(`Failed to parse S3 URL: ${err.message}`);
+    return null;
+  }
+};
 
-resources:
-  Resources:
-    QuestionTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: QuestionTable
-        BillingMode: PAY_PER_REQUEST  # On-demand/pay-per-request billing
-        AttributeDefinitions:
-          - AttributeName: awai_token
-            AttributeType: S
-          - AttributeName: computationId
-            AttributeType: S
-          - AttributeName: claimNo
-            AttributeType: S
-          - AttributeName: caseId
-            AttributeType: S
-          - AttributeName: timeStamp
-            AttributeType: N
-        KeySchema:
-          - AttributeName: awai_token
-            KeyType: HASH  # Partition key
-        GlobalSecondaryIndexes:
-          - IndexName: ComputationIdIndex
-            KeySchema:
-              - AttributeName: computationId
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL
-          - IndexName: CaseIdIndex
-            KeySchema:
-              - AttributeName: caseId
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL
-          - IndexName: ClaimNoIndex
-            KeySchema:
-              - AttributeName: claimNo
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL
+// Example usage
+const details = getS3Details('https://my-bucket.s3.amazonaws.com/docs/report.pdf?AWSAccessKey=123');
+console.log(details); // { bucket: 'my-bucket', key: 'docs/report.pdf' }
