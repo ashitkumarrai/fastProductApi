@@ -1733,20 +1733,21 @@ exports.processMessages = async (event) => {
   return { processed: event.Records.length };
 };
 
-const getS3Details = (presignedUrl) => {
+const { URL } = require('url');
+
+const getS3Key = (presignedUrl) => {
   try {
     if (!presignedUrl) throw new Error('URL is required');
-    const { hostname, pathname } = new URL(presignedUrl);
-    const bucket = hostname.split('.')[0];
+    const { pathname } = new URL(presignedUrl);
     const key = pathname.split('/').slice(2).join('/').split('?')[0];
-    if (!bucket || !key) throw new Error('Invalid S3 URL format');
-    return { bucket, key };
+    if (!key) throw new Error('Invalid S3 URL format - no key found');
+    return key;
   } catch (err) {
-    console.error(`Failed to parse S3 URL: ${err.message}`);
+    console.error(`Failed to extract S3 key: ${err.message}`);
     return null;
   }
 };
 
 // Example usage
-const details = getS3Details('https://my-bucket.s3.amazonaws.com/docs/report.pdf?AWSAccessKey=123');
-console.log(details); // { bucket: 'my-bucket', key: 'docs/report.pdf' }
+const key = getS3Key('https://my-bucket.s3.amazonaws.com/folder/file.pdf?X-Amz-Signature=abc');
+console.log(key); // "folder/file.pdf"
