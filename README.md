@@ -1806,3 +1806,104 @@ def smart_copy(src_dir, dst_dir, log_file="copy_log.txt"):
 
 # Usage - logs will be saved to copy_log.txt
 smart_copy('/path/to/source', '/path/to/destination')
+
+service: websocket-broadcast-v3
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  websocketsApiRouteSelectionExpression: '$request.body.action'
+
+functions:
+  websocket:
+    handler: handler.websocket
+    events:
+      - websocket: $connect
+      - websocket: $disconnect
+      - websocket: broadcast # Custom route for broadcasting
+      - websocket: $default
+
+resources:
+  Resources:
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: WebSocketConnections
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+
+
+import { ApiGatewayManagementApiClient, PostToConnectionCommand } from '@aws-sdk/client-apigatewaymanagementapi';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, PutCommand, DeleteCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
+
+const ddbClient = new DynamoDBClient({});
+const ddbDocClient = DynamoDBDocumentClient.from(ddbClient);
+
+export const websocket = async (event) => {
+  const { connectionId, routeKey, domainName, stage } = event.requestContext;
+  const apiClient = new ApiGatewayManagementApiClient({ 
+    endpoint: `https://${domainName}/${stage}`
+  });
+
+  // Handle connection
+  if (routeKey === '$connect') {
+    await ddbDocClient.send(new PutCommand({
+      TableName: 'WebSocketConnections',
+      Item: { connectionId }
+    }));
+    return { statusCode: 200 };
+  }
+
+  // Handle disconnection
+  if (routeKey === '$disconnect') {
+    await ddbDocClient.send(new DeleteCommand({
+      TableName: 'WebSocketConnections',
+      Key: { connectionId }
+    }));
+    return { statusCode: 200 };
+  }
+
+  // Handle broadcast to all clients
+  if (routeKey === 'broadcast') {
+    const { message } = JSON.parse(event.body);
+    
+    // Get all connections
+    const { Items: connections } = await ddbDocClient.send(new ScanCommand({
+      TableName: 'WebSocketConnections'
+    }));
+
+    // Broadcast to each connection
+    await Promise.all(connections.map(async ({ connectionId }) => {
+      try {
+        await apiClient.send(new PostToConnectionCommand({
+          ConnectionId: connectionId,
+          Data: JSON.stringify({ 
+            action: 'broadcast',
+            message,
+            timestamp: new Date().toISOString()
+          })
+        }));
+      } catch (err) {
+        // Remove stale connections (410 = Gone)
+        if (err.name === 'GoneException') {
+          await ddbDocClient.send(new DeleteCommand({
+            TableName: 'WebSocketConnections',
+            Key: { connectionId }
+          }));
+        }
+      }
+    }));
+
+    return { statusCode: 200 };
+  }
+
+  // Default handler
+  return { statusCode: 200 };
+};
