@@ -1907,3 +1907,82 @@ export const websocket = async (event) => {
   // Default handler
   return { statusCode: 200 };
 };
+
+
+
+service: websocket-explicit-role
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: us-east-1
+  websocketsApiRouteSelectionExpression: '$request.body.action'
+
+functions:
+  websocket:
+    handler: handler.websocket
+    role: WebSocketLambdaRole # Reference to the custom role
+    events:
+      - websocket: $connect
+      - websocket: $disconnect
+      - websocket: broadcast
+      - websocket: $default
+
+resources:
+  Resources:
+    # Custom IAM Role definition
+    WebSocketLambdaRole:
+      Type: AWS::IAM::Role
+      Properties:
+        RoleName: websocket-lambda-role-${self:provider.stage}
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        Policies:
+          - PolicyName: websocket-access-policy
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # WebSocket API permissions
+                - Effect: Allow
+                  Action:
+                    - execute-api:ManageConnections
+                  Resource:
+                    - !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:*/${self:provider.stage}/*'
+                
+                # DynamoDB permissions
+                - Effect: Allow
+                  Action:
+                    - dynamodb:PutItem
+                    - dynamodb:DeleteItem
+                    - dynamodb:Scan
+                  Resource:
+                    - !GetAtt ConnectionsTable.Arn
+                
+                # Basic Lambda permissions
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvents
+                  Resource: "*"
+
+    # DynamoDB Table for connection tracking
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: WebSocketConnections-${self:provider.stage}
+        AttributeDefinitions:
+          - AttributeName: connectionId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connectionId
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
