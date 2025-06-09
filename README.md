@@ -2156,3 +2156,40 @@ describe('Lambda Handler', () => {
     });
   });
 });
+
+
+// Mock AWS SDK before importing the handler
+jest.mock('@aws-sdk/client-dynamodb');
+jest.mock('@aws-sdk/lib-dynamodb');
+jest.mock('@aws-sdk/client-sqs');
+
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+const { SQSClient } = require('@aws-sdk/client-sqs');
+const { QueryCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
+const { SendMessageCommand } = require('@aws-sdk/client-sqs');
+
+// Mock the AWS clients
+const mockSend = jest.fn();
+DynamoDBDocumentClient.from = jest.fn().mockImplementation(() => ({
+  send: mockSend
+}));
+
+SQSClient.prototype.send = jest.fn();
+
+// Now import the handler after setting up mocks
+const { handler, docClient, sqs } = require('./yourLambdaFile');
+const { formatResponse, generateToken } = require('./yourLambdaFile');
+
+describe('Lambda Handler', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    
+    process.env.AWS_REGION = 'ap-southeast-1';
+    process.env.QUESTIONS_TABLE = 'questions-table';
+    process.env.ANSWERS_TABLE = 'answers-table';
+    process.env.AWAI_REQUEST_SQS_QUEUE_URL = 'sqs-queue-url';
+  });
+
+  // ... (keep all your existing test cases)
+});
