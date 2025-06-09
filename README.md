@@ -2193,3 +2193,53 @@ describe('Lambda Handler', () => {
 
   // ... (keep all your existing test cases)
 });
+
+
+
+
+const { extractS3Details } = require('./extractS3Details');
+const log = require('./log');
+
+jest.mock('./log');
+
+describe('extractS3Details', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should extract key and filename from presigned URL', () => {
+    const url = 'https://bucket.s3.amazonaws.com/path/to/file.pdf?filename=document.pdf';
+    const result = extractS3Details(url);
+    
+    expect(result).toEqual({
+      key: 'path/to/file.pdf',
+      documentName: 'document.pdf'
+    });
+  });
+
+  it('should extract filename from content-disposition', () => {
+    const url = 'https://bucket.s3.amazonaws.com/path/to/file.pdf?response-content-disposition=attachment;filename="doc.pdf"';
+    const result = extractS3Details(url);
+    
+    expect(result.documentName).toBe('doc.pdf');
+  });
+
+  it('should extract filename from URL ending when no other options', () => {
+    const url = 'https://bucket.s3.amazonaws.com/path/to/file.pdf?something=filename%3Dfinal.pdf';
+    const result = extractS3Details(url);
+    
+    expect(result.documentName).toBe('final.pdf');
+  });
+
+  it('should return null values for empty URL', () => {
+    const result = extractS3Details('');
+    expect(result).toEqual({ key: null, documentName: null });
+    expect(log.error).toHaveBeenCalled();
+  });
+
+  it('should return null values for invalid URL', () => {
+    const result = extractS3Details('not-a-url');
+    expect(result).toEqual({ key: null, documentName: null });
+    expect(log.error).toHaveBeenCalled();
+  });
+});
