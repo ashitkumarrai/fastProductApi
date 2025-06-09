@@ -1986,3 +1986,173 @@ resources:
           - AttributeName: connectionId
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
+const { handler } = require('./yourLambdaFile');
+const { docClient, sqs } = require('./yourLambdaFile');
+const { formatResponse } = require('./yourLambdaFile');
+
+// Mock AWS SDK and other dependencies
+jest.mock('@aws-sdk/lib-dynamodb');
+jest.mock('@aws-sdk/client-sqs');
+jest.mock('../helpers/log');
+jest.mock('../helpers/extract53Details');
+
+describe('Lambda Handler', () => {
+  beforeEach(() => {
+    // Clear all mocks before each test
+    jest.clearAllMocks();
+    
+    // Setup environment variables
+    process.env.AWS_REGION = 'ap-southeast-1';
+    process.env.QUESTIONS_TABLE = 'questions-table';
+    process.env.ANSWERS_TABLE = 'answers-table';
+    process.env.AWAI_REQUEST_SQS_QUEUE_URL = 'sqs-queue-url';
+  });
+
+  it('should return 400 for empty payload', async () => {
+    const event = { body: null };
+    const result = await handler(event);
+    
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toBe('Empty payload');
+  });
+
+  it('should return 400 for empty source_locations', async () => {
+    const event = { 
+      body: JSON.stringify({ 
+        source_locations: [],
+        claimNo: 'CL123',
+        caseId: 'CA456'
+      }) 
+    };
+    const result = await handler(event);
+    
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toBe('source_locations are required');
+  });
+
+  it('should process valid request and send to SQS', async () => {
+    // Mock input data
+    const sourceLocations = [{
+      location_uri: 's3://bucket/key',
+      metadata: {
+        classificationType: 'INVOICE'
+      }
+    }];
+    
+    const event = { 
+      body: JSON.stringify({ 
+        source_locations: sourceLocations,
+        claimNo: 'CL123',
+        caseId: 'CA456'
+      }) 
+    };
+    
+    // Mock dependencies
+    require('../helpers/extract53Details').extract53Details.mockReturnValue({
+      key: 'mock-key',
+      documentName: 'mock-document.pdf'
+    });
+    
+    const mockQuestions = [
+      { documentClassification: 'INVOICE', questionText: 'What is the total amount?' }
+    ];
+    
+    docClient.send.mockImplementation((command) => {
+      if (command instanceof QueryCommand) {
+        return Promise.resolve({ Items: mockQuestions });
+      }
+      if (command instanceof PutCommand) {
+        return Promise.resolve({});
+      }
+    });
+    
+    sqs.send.mockResolvedValue({});
+    
+    // Call handler
+    const result = await handler(event);
+    
+    // Verify response
+    expect(result.statusCode).toBe(202);
+    const responseBody = JSON.parse(result.body);
+    expect(responseBody.message).toBe('Documents processing accepted');
+    expect(responseBody.status).toBe('SENT');
+    expect(responseBody.computationId).toMatch(/^C[a-f0-9-]+$/);
+    expect(responseBody.awai_token).toBeDefined();
+    
+    // Verify DynamoDB interactions
+    expect(docClient.send).toHaveBeenCalledTimes(2);
+    
+    // Verify SQS interaction
+    expect(sqs.send).toHaveBeenCalledTimes(1);
+    const sqsParams = sqs.send.mock.calls[0][0].input;
+    expect(sqsParams.QueueUrl).toBe(process.env.AWAI_REQUEST_SQS_QUEUE_URL);
+    expect(JSON.parse(sqsParams.MessageBody).toEqual(
+      expect.objectContaining({
+        app_name: "CLAIMS_APAC",
+        source_locations: expect.arrayContaining([
+          expect.objectContaining({
+            location_uri: 's3://bucket/key'
+          })
+        ])
+      })
+    );
+  });
+
+  it('should handle errors during processing', async () => {
+    const sourceLocations = [{
+      location_uri: 's3://bucket/key',
+      metadata: {
+        classificationType: 'INVOICE'
+      }
+    }];
+    
+    const event = { 
+      body: JSON.stringify({ 
+        source_locations: sourceLocations,
+        claimNo: 'CL123',
+        caseId: 'CA456'
+      }) 
+    };
+    
+    // Mock error
+    docClient.send.mockRejectedValue(new Error('DynamoDB error'));
+    
+    const result = await handler(event);
+    
+    expect(result.statusCode).toBe(500);
+    expect(JSON.parse(result.body).error).toBe('Internal server error');
+  });
+
+  describe('formatResponse', () => {
+    it('should return correct response format', () => {
+      const response = formatResponse(200, { message: 'Success' });
+      
+      expect(response).toEqual({
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Success' }),
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Allow-Methods': '*'
+        }
+      });
+    });
+  });
+
+  describe('generateToken', () => {
+    it('should generate a token with correct format', () => {
+      // Mock the current date
+      const mockDate = new Date('2023-01-01T12:00:00Z');
+      jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
+      
+      const token = generateToken();
+      
+      // The token should be a combination of timestamp and random UUID
+      expect(token).toMatch(/^20230101200000[a-f0-9-]+$/);
+      
+      // Restore original Date
+      jest.restoreAllMocks();
+    });
+  });
+});
