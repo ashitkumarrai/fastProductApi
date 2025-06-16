@@ -2243,3 +2243,58 @@ describe('extractS3Details', () => {
     expect(log.error).toHaveBeenCalled();
   });
 });
+
+
+
+
+const AWS = require('aws-sdk');
+const dynamodb = new AWS.DynamoDB.DocumentClient();
+
+const ANSWER_TABLE = process.env.ANSWERS_TABLE;
+
+module.exports.generateId = async (event) => {
+  try {
+    // 1. Get the current maximum ID from your answers table
+    const maxIdResult = await dynamodb.scan({
+      TableName: ANSWER_TABLE,
+      ProjectionExpression: 'id',
+      Select: 'SPECIFIC_ATTRIBUTES'
+    }).promise();
+
+    // 2. Find the highest numeric part
+    let maxSequence = 0;
+    maxIdResult.Items.forEach(item => {
+      if (item.id && item.id.startsWith('AU')) {
+        const numPart = parseInt(item.id.substring(2)) || 0;
+        maxSequence = Math.max(maxSequence, numPart);
+      }
+    });
+
+    // 3. Generate new ID (dynamic digit length)
+    const newSequence = maxSequence + 1;
+    const digitsNeeded = Math.max(6, Math.ceil(Math.log10(newSequence + 1)));
+    const newId = `AU${newSequence.toString().padStart(digitsNeeded, '0')}`;
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        id: newId,
+        sequence: newSequence
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      }
+    };
+
+  } catch (error) {
+    console.error('Error generating ID:', error);
+    return {
+      statusCode: 500,
+      body: JSON.stringify({
+        error: 'Failed to generate ID',
+        details: error.message
+      })
+    };
+  }
+};
