@@ -2298,3 +2298,130 @@ module.exports.generateId = async (event) => {
     };
   }
 };
+
+
+
+
+
+import org.apache.poi.xwpf.usermodel.*;
+import org.springframework.stereotype.Service;
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.util.IOUtils;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+
+@Service
+public class WordDocumentService {
+
+    /**
+     * Adds tables at specific markers in the Word document
+     * @param originalDoc The original Word document as byte array
+     * @param tablesData Map where key is the marker text (e.g., "table_1") 
+     *                   and value is the table data
+     * @return Modified document with tables as byte array
+     */
+    public byte[] addTablesAtMarkers(byte[] originalDoc,
+                                   Map<String, List<Map<String, String>>> tablesData) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(originalDoc);
+             XWPFDocument document = new XWPFDocument(bis);
+             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+
+            // Process all paragraphs to find markers
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                String text = paragraph.getText();
+                if (text != null && text.trim().length() > 0) {
+                    for (String marker : tablesData.keySet()) {
+                        if (text.contains(marker)) {
+                            replaceMarkerWithTable(paragraph, marker, tablesData.get(marker));
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Process tables (in case markers are in tables)
+            for (XWPFTable table : document.getTables()) {
+                for (XWPFTableRow row : table.getRows()) {
+                    for (XWPFTableCell cell : row.getTableCells()) {
+                        for (XWPFParagraph paragraph : cell.getParagraphs()) {
+                            String text = paragraph.getText();
+                            if (text != null && text.trim().length() > 0) {
+                                for (String marker : tablesData.keySet()) {
+                                    if (text.contains(marker)) {
+                                        replaceMarkerWithTable(paragraph, marker, tablesData.get(marker));
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            document.write(bos);
+            return bos.toByteArray();
+        }
+    }
+
+    private void replaceMarkerWithTable(XWPFParagraph paragraph, String marker, 
+                                      List<Map<String, String>> tableData) {
+        XWPFDocument document = paragraph.getDocument();
+        
+        // Remove the marker paragraph
+        paragraph.getRuns().forEach(r -> r.setText("", 0));
+        
+        // Create table after the marker paragraph
+        XWPFTable table = document.insertNewTbl(paragraph.getCTP().newCursor());
+        
+        if (tableData == null || tableData.isEmpty()) {
+            XWPFTableRow row = table.createRow();
+            row.createCell().setText("No data available");
+            return;
+        }
+
+        // Create header row
+        XWPFTableRow headerRow = table.getRow(0);
+        Map<String, String> firstRow = tableData.get(0);
+        
+        // Add header cells
+        int i = 0;
+        for (String header : firstRow.keySet()) {
+            if (i == 0) {
+                headerRow.getCell(0).setText(header);
+            } else {
+                headerRow.addNewTableCell().setText(header);
+            }
+            i++;
+        }
+
+        // Style header row
+        for (int j = 0; j < firstRow.size(); j++) {
+            XWPFTableCell cell = headerRow.getCell(j);
+            cell.setColor("4472C4"); // Blue background
+            for (XWPFParagraph p : cell.getParagraphs()) {
+                p.setAlignment(ParagraphAlignment.CENTER);
+                for (XWPFRun r : p.getRuns()) {
+                    r.setColor("FFFFFF"); // White text
+                    r.setBold(true);
+                }
+            }
+        }
+
+        // Add data rows
+        for (Map<String, String> rowData : tableData) {
+            XWPFTableRow row = table.createRow();
+            int cellIndex = 0;
+            for (String value : rowData.values()) {
+                row.getCell(cellIndex).setText(value);
+                cellIndex++;
+            }
+        }
+
+        // Set table width
+        table.setWidth("100%");
+    }
+}
