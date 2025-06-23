@@ -1986,442 +1986,122 @@ resources:
           - AttributeName: connectionId
             KeyType: HASH
         BillingMode: PAY_PER_REQUEST
-const { handler } = require('./yourLambdaFile');
-const { docClient, sqs } = require('./yourLambdaFile');
-const { formatResponse } = require('./yourLambdaFile');
+u'));
+    
+    SendMessageCommand } = require('@aws-sdk/client-sqs');
 
-// Mock AWS SDK and other dependencies
+
+
+const { handler } = require('./yourHandlerFile');
+const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
+const { transformAndSaveSummary } = require('../helpers/transformAndSaveSummary');
+const log = require('../helpers/log');
+
+// Mock all external dependencies
 jest.mock('@aws-sdk/lib-dynamodb');
-jest.mock('@aws-sdk/client-sqs');
+jest.mock('../helpers/transformAndSaveSummary');
 jest.mock('../helpers/log');
-jest.mock('../helpers/extract53Details');
 
-describe('Lambda Handler', () => {
+describe('SQS Message Handler', () => {
+  let mockSend;
+
   beforeEach(() => {
-    // Clear all mocks before each test
+    // Reset all mocks before each test
     jest.clearAllMocks();
     
-    // Setup environment variables
-    process.env.AWS_REGION = 'ap-southeast-1';
-    process.env.QUESTIONS_TABLE = 'questions-table';
-    process.env.ANSWERS_TABLE = 'answers-table';
-    process.env.AWAI_REQUEST_SQS_QUEUE_URL = 'sqs-queue-url';
-  });
-
-  it('should return 400 for empty payload', async () => {
-    const event = { body: null };
-    const result = await handler(event);
-    
-    expect(result.statusCode).toBe(400);
-    expect(JSON.parse(result.body).error).toBe('Empty payload');
-  });
-
-  it('should return 400 for empty source_locations', async () => {
-    const event = { 
-      body: JSON.stringify({ 
-        source_locations: [],
-        claimNo: 'CL123',
-        caseId: 'CA456'
-      }) 
-    };
-    const result = await handler(event);
-    
-    expect(result.statusCode).toBe(400);
-    expect(JSON.parse(result.body).error).toBe('source_locations are required');
-  });
-
-  it('should process valid request and send to SQS', async () => {
-    // Mock input data
-    const sourceLocations = [{
-      location_uri: 's3://bucket/key',
-      metadata: {
-        classificationType: 'INVOICE'
-      }
-    }];
-    
-    const event = { 
-      body: JSON.stringify({ 
-        source_locations: sourceLocations,
-        claimNo: 'CL123',
-        caseId: 'CA456'
-      }) 
-    };
-    
-    // Mock dependencies
-    require('../helpers/extract53Details').extract53Details.mockReturnValue({
-      key: 'mock-key',
-      documentName: 'mock-document.pdf'
+    // Setup DynamoDB mock
+    mockSend = jest.fn();
+    DynamoDBDocumentClient.from.mockReturnValue({
+      send: mockSend
     });
-    
-    const mockQuestions = [
-      { documentClassification: 'INVOICE', questionText: 'What is the total amount?' }
-    ];
-    
-    docClient.send.mockImplementation((command) => {
+  });
+
+  it('should process a single SQS message successfully', async () => {
+    // Mock event data
+    const event = {
+      Records: [{
+        body: JSON.stringify({
+          ai_token: 'test-token',
+          ai_response: [{
+            metadata: { classificationType: 'test-class' },
+            question: 'test-question'
+          }]
+        })
+      }]
+    };
+
+    // Mock DynamoDB responses
+    mockSend.mockImplementation((command) => {
       if (command instanceof QueryCommand) {
-        return Promise.resolve({ Items: mockQuestions });
+        return Promise.resolve({ Items: [{ fieldName: 'test-field' }] });
       }
-      if (command instanceof PutCommand) {
-        return Promise.resolve({});
-      }
+      return Promise.resolve({}); // For UpdateCommand
     });
-    
-    sqs.send.mockResolvedValue({});
-    
-    // Call handler
+
+    // Execute handler
     const result = await handler(event);
-    
-    // Verify response
-    expect(result.statusCode).toBe(202);
-    const responseBody = JSON.parse(result.body);
-    expect(responseBody.message).toBe('Documents processing accepted');
-    expect(responseBody.status).toBe('SENT');
-    expect(responseBody.computationId).toMatch(/^C[a-f0-9-]+$/);
-    expect(responseBody.awai_token).toBeDefined();
-    
-    // Verify DynamoDB interactions
-    expect(docClient.send).toHaveBeenCalledTimes(2);
-    
-    // Verify SQS interaction
-    expect(sqs.send).toHaveBeenCalledTimes(1);
-    const sqsParams = sqs.send.mock.calls[0][0].input;
-    expect(sqsParams.QueueUrl).toBe(process.env.AWAI_REQUEST_SQS_QUEUE_URL);
-    expect(JSON.parse(sqsParams.MessageBody).toEqual(
-      expect.objectContaining({
-        app_name: "CLAIMS_APAC",
-        source_locations: expect.arrayContaining([
-          expect.objectContaining({
-            location_uri: 's3://bucket/key'
-          })
-        ])
-      })
-    );
+
+    // Verify results
+    expect(result).toEqual({ processed: 1 });
+    expect(mockSend).toHaveBeenCalledTimes(2); // Query + Update
+    expect(transformAndSaveSummary).toHaveBeenCalledWith('test-token');
+  });
+
+  it('should handle multiple SQS messages', async () => {
+    const event = {
+      Records: [
+        { body: JSON.stringify({ ai_token: 'token1', ai_response: [] }) },
+        { body: JSON.stringify({ ai_token: 'token2', ai_response: [] }) }
+      ]
+    };
+
+    mockSend.mockResolvedValue({}); // For all commands
+
+    const result = await handler(event);
+    expect(result).toEqual({ processed: 2 });
   });
 
   it('should handle errors during processing', async () => {
-    const sourceLocations = [{
-      location_uri: 's3://bucket/key',
-      metadata: {
-        classificationType: 'INVOICE'
-      }
-    }];
-    
-    const event = { 
-      body: JSON.stringify({ 
-        source_locations: sourceLocations,
-        claimNo: 'CL123',
-        caseId: 'CA456'
-      }) 
+    const event = {
+      Records: [{
+        body: JSON.stringify({
+          ai_token: 'test-token',
+          ai_response: [{
+            metadata: { classificationType: 'test-class' },
+            question: 'test-question'
+          }]
+        })
+      }]
     };
-    
-    // Mock error
-    docClient.send.mockRejectedValue(new Error('DynamoDB error'));
-    
-    const result = await handler(event);
-    
-    expect(result.statusCode).toBe(500);
-    expect(JSON.parse(result.body).error).toBe('Internal server error');
-  });
 
-  describe('formatResponse', () => {
-    it('should return correct response format', () => {
-      const response = formatResponse(200, { message: 'Success' });
-      
-      expect(response).toEqual({
-        statusCode: 200,
-        body: JSON.stringify({ message: 'Success' }),
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': '*',
-          'Access-Control-Allow-Methods': '*'
-        }
-      });
-    });
-  });
+    mockSend.mockRejectedValue(new Error('DynamoDB error'));
 
-  describe('generateToken', () => {
-    it('should generate a token with correct format', () => {
-      // Mock the current date
-      const mockDate = new Date('2023-01-01T12:00:00Z');
-      jest.spyOn(global, 'Date').mockImplementation(() => mockDate);
-      
-      const token = generateToken();
-      
-      // The token should be a combination of timestamp and random UUID
-      expect(token).toMatch(/^20230101200000[a-f0-9-]+$/);
-      
-      // Restore original Date
-      jest.restoreAllMocks();
-    });
-  });
-});
-
-
-// Mock AWS SDK before importing the handler
-jest.mock('@aws-sdk/client-dynamodb');
-jest.mock('@aws-sdk/lib-dynamodb');
-jest.mock('@aws-sdk/client-sqs');
-
-const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient } = require('@aws-sdk/lib-dynamodb');
-const { SQSClient } = require('@aws-sdk/client-sqs');
-const { QueryCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
-const { SendMessageCommand } = require('@aws-sdk/client-sqs');
-
-// Mock the AWS clients
-const mockSend = jest.fn();
-DynamoDBDocumentClient.from = jest.fn().mockImplementation(() => ({
-  send: mockSend
-}));
-
-SQSClient.prototype.send = jest.fn();
-
-// Now import the handler after setting up mocks
-const { handler, docClient, sqs } = require('./yourLambdaFile');
-const { formatResponse, generateToken } = require('./yourLambdaFile');
-
-describe('Lambda Handler', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    
-    process.env.AWS_REGION = 'ap-southeast-1';
-    process.env.QUESTIONS_TABLE = 'questions-table';
-    process.env.ANSWERS_TABLE = 'answers-table';
-    process.env.AWAI_REQUEST_SQS_QUEUE_URL = 'sqs-queue-url';
-  });
-
-  // ... (keep all your existing test cases)
-});
-
-
-
-
-const { extractS3Details } = require('./extractS3Details');
-const log = require('./log');
-
-jest.mock('./log');
-
-describe('extractS3Details', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('should extract key and filename from presigned URL', () => {
-    const url = 'https://bucket.s3.amazonaws.com/path/to/file.pdf?filename=document.pdf';
-    const result = extractS3Details(url);
-    
-    expect(result).toEqual({
-      key: 'path/to/file.pdf',
-      documentName: 'document.pdf'
-    });
-  });
-
-  it('should extract filename from content-disposition', () => {
-    const url = 'https://bucket.s3.amazonaws.com/path/to/file.pdf?response-content-disposition=attachment;filename="doc.pdf"';
-    const result = extractS3Details(url);
-    
-    expect(result.documentName).toBe('doc.pdf');
-  });
-
-  it('should extract filename from URL ending when no other options', () => {
-    const url = 'https://bucket.s3.amazonaws.com/path/to/file.pdf?something=filename%3Dfinal.pdf';
-    const result = extractS3Details(url);
-    
-    expect(result.documentName).toBe('final.pdf');
-  });
-
-  it('should return null values for empty URL', () => {
-    const result = extractS3Details('');
-    expect(result).toEqual({ key: null, documentName: null });
+    await expect(handler(event)).rejects.toThrow('DynamoDB error');
     expect(log.error).toHaveBeenCalled();
   });
 
-  it('should return null values for invalid URL', () => {
-    const result = extractS3Details('not-a-url');
-    expect(result).toEqual({ key: null, documentName: null });
-    expect(log.error).toHaveBeenCalled();
-  });
-});
+  it('should handle missing fieldName in query response', async () => {
+    const event = {
+      Records: [{
+        body: JSON.stringify({
+          ai_token: 'test-token',
+          ai_response: [{
+            metadata: { classificationType: 'test-class' },
+            question: 'test-question'
+          }]
+        })
+      }]
+    };
 
-
-
-
-const AWS = require('aws-sdk');
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-
-const ANSWER_TABLE = process.env.ANSWERS_TABLE;
-
-module.exports.generateId = async (event) => {
-  try {
-    // 1. Get the current maximum ID from your answers table
-    const maxIdResult = await dynamodb.scan({
-      TableName: ANSWER_TABLE,
-      ProjectionExpression: 'id',
-      Select: 'SPECIFIC_ATTRIBUTES'
-    }).promise();
-
-    // 2. Find the highest numeric part
-    let maxSequence = 0;
-    maxIdResult.Items.forEach(item => {
-      if (item.id && item.id.startsWith('AU')) {
-        const numPart = parseInt(item.id.substring(2)) || 0;
-        maxSequence = Math.max(maxSequence, numPart);
+    mockSend.mockImplementation((command) => {
+      if (command instanceof QueryCommand) {
+        return Promise.resolve({ Items: [{}] }); // No fieldName
       }
+      return Promise.resolve({});
     });
 
-    // 3. Generate new ID (dynamic digit length)
-    const newSequence = maxSequence + 1;
-    const digitsNeeded = Math.max(6, Math.ceil(Math.log10(newSequence + 1)));
-    const newId = `AU${newSequence.toString().padStart(digitsNeeded, '0')}`;
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        id: newId,
-        sequence: newSequence
-      }),
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      }
-    };
-
-  } catch (error) {
-    console.error('Error generating ID:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({
-        error: 'Failed to generate ID',
-        details: error.message
-      })
-    };
-  }
-};
-
-
-
-
-
-import org.apache.poi.xwpf.usermodel.*;
-import org.springframework.stereotype.Service;
-import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
-import org.apache.poi.util.IOUtils;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.util.List;
-import java.util.Map;
-
-@Service
-public class WordDocumentService {
-
-    /**
-     * Adds tables at specific markers in the Word document
-     * @param originalDoc The original Word document as byte array
-     * @param tablesData Map where key is the marker text (e.g., "table_1") 
-     *                   and value is the table data
-     * @return Modified document with tables as byte array
-     */
-    public byte[] addTablesAtMarkers(byte[] originalDoc,
-                                   Map<String, List<Map<String, String>>> tablesData) throws IOException {
-        try (ByteArrayInputStream bis = new ByteArrayInputStream(originalDoc);
-             XWPFDocument document = new XWPFDocument(bis);
-             ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-
-            // Process all paragraphs to find markers
-            for (XWPFParagraph paragraph : document.getParagraphs()) {
-                String text = paragraph.getText();
-                if (text != null && text.trim().length() > 0) {
-                    for (String marker : tablesData.keySet()) {
-                        if (text.contains(marker)) {
-                            replaceMarkerWithTable(paragraph, marker, tablesData.get(marker));
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Process tables (in case markers are in tables)
-            for (XWPFTable table : document.getTables()) {
-                for (XWPFTableRow row : table.getRows()) {
-                    for (XWPFTableCell cell : row.getTableCells()) {
-                        for (XWPFParagraph paragraph : cell.getParagraphs()) {
-                            String text = paragraph.getText();
-                            if (text != null && text.trim().length() > 0) {
-                                for (String marker : tablesData.keySet()) {
-                                    if (text.contains(marker)) {
-                                        replaceMarkerWithTable(paragraph, marker, tablesData.get(marker));
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            document.write(bos);
-            return bos.toByteArray();
-        }
-    }
-
-    private void replaceMarkerWithTable(XWPFParagraph paragraph, String marker, 
-                                      List<Map<String, String>> tableData) {
-        XWPFDocument document = paragraph.getDocument();
-        
-        // Remove the marker paragraph
-        paragraph.getRuns().forEach(r -> r.setText("", 0));
-        
-        // Create table after the marker paragraph
-        XWPFTable table = document.insertNewTbl(paragraph.getCTP().newCursor());
-        
-        if (tableData == null || tableData.isEmpty()) {
-            XWPFTableRow row = table.createRow();
-            row.createCell().setText("No data available");
-            return;
-        }
-
-        // Create header row
-        XWPFTableRow headerRow = table.getRow(0);
-        Map<String, String> firstRow = tableData.get(0);
-        
-        // Add header cells
-        int i = 0;
-        for (String header : firstRow.keySet()) {
-            if (i == 0) {
-                headerRow.getCell(0).setText(header);
-            } else {
-                headerRow.addNewTableCell().setText(header);
-            }
-            i++;
-        }
-
-        // Style header row
-        for (int j = 0; j < firstRow.size(); j++) {
-            XWPFTableCell cell = headerRow.getCell(j);
-            cell.setColor("4472C4"); // Blue background
-            for (XWPFParagraph p : cell.getParagraphs()) {
-                p.setAlignment(ParagraphAlignment.CENTER);
-                for (XWPFRun r : p.getRuns()) {
-                    r.setColor("FFFFFF"); // White text
-                    r.setBold(true);
-                }
-            }
-        }
-
-        // Add data rows
-        for (Map<String, String> rowData : tableData) {
-            XWPFTableRow row = table.createRow();
-            int cellIndex = 0;
-            for (String value : rowData.values()) {
-                row.getCell(cellIndex).setText(value);
-                cellIndex++;
-            }
-        }
-
-        // Set table width
-        table.setWidth("100%");
-    }
-}
+    await handler(event);
+    // Verify the code continues execution even without fieldName
+    expect(transformAndSaveSummary).toHaveBeenCalled();
+  });
+});
