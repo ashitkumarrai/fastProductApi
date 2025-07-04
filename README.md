@@ -2105,3 +2105,33 @@ describe('SQS Message Handler', () => {
     expect(transformAndSaveSummary).toHaveBeenCalled();
   });
 });
+
+
+
+
+import json
+from boto3.dynamodb.types import TypeSerializer
+
+def convert_json_to_dynamodb_json(input_file, output_file):
+    # Read the input JSON file
+    with open(input_file, 'r') as f:
+        data = json.load(f)
+    
+    # Initialize the TypeSerializer
+    serializer = TypeSerializer()
+    
+    # Convert each item to DynamoDB format
+    if isinstance(data, list):
+        dynamodb_items = []
+        for item in data:
+            dynamodb_item = {k: serializer.serialize(v) for k, v in item.items()}
+            dynamodb_items.append(dynamodb_item)
+    else:
+        dynamodb_items = {k: serializer.serialize(v) for k, v in data.items()}
+    
+    # Write the output to a file
+    with open(output_file, 'w') as f:
+        json.dump(dynamodb_items, f, indent=2)
+
+# Example usage
+convert_json_to_dynamodb_json('input.json', 'dynamodb_output.json')
