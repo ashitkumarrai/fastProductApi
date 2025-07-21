@@ -2135,3 +2135,98 @@ def convert_json_to_dynamodb_json(input_file, output_file):
 
 # Example usage
 convert_json_to_dynamodb_json('input.json', 'dynamodb_output.json')
+
+
+
+
+// __tests__/updateComputationStatus.test.js
+
+const { handler } = require('../handlers/updateComputationStatus');
+
+// Mock dependencies
+jest.mock('../helpers/saveOrUpdateComputation', () => jest.fn());
+jest.mock('../helpers/log', () => jest.fn());
+
+describe('updateComputationStatus handler', () => {
+  const fakeEvent = (body) => ({ body: JSON.stringify(body) });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should return 400 if payload is empty', async () => {
+    const event = {};
+    const result = await handler(event);
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toMatch(/Empty payload/);
+  });
+
+  it('should return 400 if claimNo is missing', async () => {
+    const event = fakeEvent({ computationStatus: 'success' });
+    const result = await handler(event);
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toMatch(/claimNo is mandatory/);
+  });
+
+  it('should return 400 if computationStatus is missing', async () => {
+    const event = fakeEvent({ claimNo: 'c123' });
+    const result = await handler(event);
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toMatch(/computationStatus is mandatory/);
+  });
+
+  it('should return 400 if all of computationId, taskId, and settleId are missing', async () => {
+    const event = fakeEvent({ claimNo: 'c123', computationStatus: 'success' });
+    const result = await handler(event);
+    expect(result.statusCode).toBe(400);
+    expect(JSON.parse(result.body).error).toMatch(/Either taskId or computationId or settleId must be provided/);
+  });
+
+  it('should process valid input and return 200', async () => {
+    const saveOrUpdateComputation = require('../helpers/saveOrUpdateComputation');
+    saveOrUpdateComputation.mockResolvedValue(true);
+
+    const event = fakeEvent({ 
+      claimNo: 'c123',
+      computationStatus: 'done',
+      taskId: 't1'
+    });
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body).input.claimNo).toBe('c123');
+    expect(saveOrUpdateComputation).toHaveBeenCalled();
+  });
+
+  it('should return 500 if an unknown error occurs', async () => {
+    const saveOrUpdateComputation = require('../helpers/saveOrUpdateComputation');
+    saveOrUpdateComputation.mockRejectedValue(new Error('Unknown'));
+
+    const event = fakeEvent({
+      claimNo: 'c123',
+      computationStatus: 'fail',
+      taskId: 't1'
+    });
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(500);
+    expect(JSON.parse(result.body).details).toMatch(/Unknown/);
+  });
+
+  it('should return 200 with error message if \"No record found\" error occurs', async () => {
+    const saveOrUpdateComputation = require('../helpers/saveOrUpdateComputation');
+    const err = new Error('No record found');
+    saveOrUpdateComputation.mockRejectedValue(err);
+
+    const event = fakeEvent({
+      claimNo: 'c123',
+      computationStatus: 'fail',
+      taskId: 't1'
+    });
+    const result = await handler(event);
+
+    expect(result.statusCode).toBe(200);
+    expect(JSON.parse(result.body).error).toMatch(/No record found/);
+  });
+});
+
